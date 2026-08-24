@@ -4,7 +4,7 @@
 The runner inlines the modular application so it does not depend on a local
 network listener. It validates visual containment at common phone, tablet and
 desktop viewports, then completes a real trade + Reaction Test round through
-the public UI.
+the public UI and verifies that the resulting market repricing is visible.
 """
 from __future__ import annotations
 
@@ -53,8 +53,9 @@ def inline_app() -> str:
     html = (ROOT / "index.html").read_text(encoding="utf-8")
     html = re.sub(r'<link[^>]+fonts\.(?:googleapis|gstatic)[^>]*>', "", html)
     html = re.sub(r'<link[^>]+rel="(?:preload|manifest)"[^>]*>', "", html)
+    html = html.replace('<script src="supabase-config.js"></script>', '')
     css = "\n".join((ROOT / name).read_text(encoding="utf-8") for name in (
-        "styles.css", "styles-pages.css", "styles-interaction.css", "responsive.css"
+        "styles.css", "styles-pages.css", "styles-interaction.css", "responsive.css", "online.css"
     ))
 
     replacements = {
@@ -68,7 +69,7 @@ def inline_app() -> str:
         css = css.replace(name, value)
 
     html = re.sub(r'<link[^>]+href="styles\.css"[^>]*>', f"<style>{css}</style>", html)
-    html = re.sub(r'<link[^>]+href="(?:styles-pages|styles-interaction|responsive)\.css"[^>]*>', "", html)
+    html = re.sub(r'<link[^>]+href="(?:styles-pages|styles-interaction|responsive|background-hq|online)\.css"[^>]*>', "", html)
     imports = json.dumps({"imports": module_map()})
     html = html.replace(
         '<script type="module" src="src/main.js"></script>',
@@ -124,7 +125,6 @@ def complete_reaction_round(browser, html: str, screenshots: bool) -> None:
 
     page.get_by_role("button", name="CREATE LOCAL ROOM").click()
     page.wait_for_selector(".lobby-page")
-    # Keep only Reaction Test in the rotation.
     for button in page.locator(".game-toggle").all():
         game_id = button.get_attribute("data-game-id")
         if game_id != "reaction" and "is-active" in (button.get_attribute("class") or ""):
@@ -144,9 +144,6 @@ def complete_reaction_round(browser, html: str, screenshots: bool) -> None:
     page.get_by_role("button", name="START MINIGAME").click()
     page.wait_for_selector(".game-modal")
     page.get_by_role("button", name=re.compile("START FOR")).click()
-    # The production game intentionally randomizes the wait before GO. Force the
-    # already-started runtime into its deterministic GO state so CI tests the
-    # submission/settlement path without depending on wall-clock scheduling.
     page.wait_for_selector(".reaction-pad--waiting")
     page.evaluate(
         """() => window.__FE_STORE__.update((state) => {
@@ -160,18 +157,23 @@ def complete_reaction_round(browser, html: str, screenshots: bool) -> None:
     )
     page.wait_for_selector(".reaction-pad--go")
     page.locator(".reaction-pad").click()
-    page.wait_for_selector(".results-modal", timeout=7_000)
+    page.wait_for_selector(".results-modal--market", timeout=7_000)
 
     state = page.evaluate("window.__FE_STORE__.getState()")
-    assert state["session"]["rounds"][0]["results"], "Round did not settle"
+    round_state = state["session"]["rounds"][0]
+    assert round_state["results"], "Round did not settle"
     assert len(state["accounts"]["friend"][state["players"][0]["id"]]["ledger"]) == 1, "Trade was not recorded"
     assert state["session"]["phase"] == "results", state["session"]["phase"]
+    assert all(move["oldPrice"] > 0 and move["newPrice"] > 0 for move in round_state["marketMoves"]), round_state["marketMoves"]
+    assert page.get_by_text("THE FRIEND MARKET MOVED.").is_visible(), "Settlement headline is missing"
+    assert page.locator(".market-result-row").count() == len(state["players"]), "Not every friend price is visible"
+    assert page.get_by_text("BEFORE").first.is_visible() and page.get_by_text("AFTER").first.is_visible(), "Before/after prices are missing"
     assert not errors, f"Flow emitted JavaScript errors: {errors}"
     assert_contained(page, 412, "reaction-flow")
     if screenshots:
-        page.screenshot(path=str(ARTIFACTS / "reaction-results.png"), full_page=False)
+        page.screenshot(path=str(ARTIFACTS / "reaction-market-settlement.png"), full_page=False)
     page.close()
-    print("PASS complete UI flow: lobby → trade → lock → Reaction Test → settlement")
+    print("PASS complete UI flow: trade → minigame → visible Friend Market repricing")
 
 
 def main() -> int:
@@ -183,11 +185,7 @@ def main() -> int:
     html = inline_app()
     executable = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            headless=True,
-            executable_path=executable,
-            args=["--no-sandbox"],
-        )
+        browser = playwright.chromium.launch(headless=True, executable_path=executable, args=["--no-sandbox"])
         try:
             responsive_matrix(browser, html, args.screenshots)
             complete_reaction_round(browser, html, args.screenshots)

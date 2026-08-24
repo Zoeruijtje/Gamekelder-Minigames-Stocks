@@ -67,26 +67,37 @@ export function settleFriendMarket({ players, results, market, category, volatil
   });
 
   const averageRaw = rawMoves.reduce((sum, move) => sum + move.raw, 0) / Math.max(rawMoves.length, 1);
-  const moves = rawMoves.map((move) => ({
-    ...move,
-    return: round(clamp(move.raw - averageRaw, -mode.cap, mode.cap), 4),
-  }));
-
   const nextMarket = structuredClone(market);
+  const moves = rawMoves.map((move) => {
+    const asset = nextMarket[move.playerId];
+    const marketReturn = round(clamp(move.raw - averageRaw, -mode.cap, mode.cap), 4);
+    const oldPrice = Number(asset?.price ?? 0);
+    const newPrice = round(Math.max(5, oldPrice * (1 + marketReturn)), 2);
+    return {
+      ...move,
+      return: marketReturn,
+      oldPrice,
+      newPrice,
+      priceDelta: round(newPrice - oldPrice, 2),
+      symbol: asset?.symbol ?? '',
+      cap: mode.cap,
+    };
+  });
+
   for (const move of moves) {
     const asset = nextMarket[move.playerId];
     if (!asset) continue;
-    const oldPrice = asset.price;
-    const newPrice = round(Math.max(5, oldPrice * (1 + move.return)), 2);
-    asset.price = newPrice;
+    asset.previousPrice = move.oldPrice;
+    asset.price = move.newPrice;
     asset.roundChange = round(move.return * 100, 2);
-    asset.sessionChange = round(((newPrice / asset.openPrice) - 1) * 100, 2);
+    asset.sessionChange = round(((move.newPrice / asset.openPrice) - 1) * 100, 2);
     asset.sentiment = move.return > 0.04 ? 'bullish' : move.return < -0.04 ? 'bearish' : 'neutral';
     asset.history.push({
-      price: newPrice,
+      price: move.newPrice,
       at: new Date().toISOString(),
       reason: `${category} round`,
       return: move.return,
+      oldPrice: move.oldPrice,
     });
   }
 
