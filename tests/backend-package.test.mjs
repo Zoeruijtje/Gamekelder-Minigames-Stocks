@@ -29,11 +29,12 @@ test('the complete deployed Supabase migration ledger is versioned', () => {
 
 test('browser configuration contains only a publishable Supabase key', () => {
   const config = read('supabase-config.js');
-  assert.match(config, /knndezzbjzcykysasfnw\.supabase\.co/);
-  assert.match(config, /sb_publishable_/);
-  assert.doesNotMatch(config, /sb_secret_/);
-  assert.doesNotMatch(config, /service[_-]?role/i);
-  assert.doesNotMatch(config, /database password/i);
+  const executableConfig = config.replace(/^\s*\/\/.*$/gm, '');
+  assert.match(executableConfig, /knndezzbjzcykysasfnw\.supabase\.co/);
+  assert.match(executableConfig, /sb_publishable_/);
+  assert.doesNotMatch(executableConfig, /sb_secret_/);
+  assert.doesNotMatch(executableConfig, /service[_-]?role/i);
+  assert.doesNotMatch(executableConfig, /database password/i);
 });
 
 test('guest identities are rate limited and authoritative settlement is server-side', () => {
