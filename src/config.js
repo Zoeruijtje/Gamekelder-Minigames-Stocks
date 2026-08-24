@@ -1,6 +1,6 @@
-export const APP_VERSION = 3;
+export const APP_VERSION = 4;
 export const STORAGE_KEY = `friendExchangeStateV${APP_VERSION}`;
-export const CHANNEL_NAME = 'friend-exchange-local-v3';
+export const CHANNEL_NAME = 'friend-exchange-local-v4';
 
 export const PHASES = Object.freeze({
   LOBBY: 'lobby',
