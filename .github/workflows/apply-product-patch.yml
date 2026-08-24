@@ -1,0 +1,75 @@
+name: Apply staged Friend Exchange product patch
+
+on:
+  push:
+    branches: [feat/free-supabase-market-refinement]
+    paths:
+      - .patch/gamekelder_patch.tar.gz.b64
+      - .github/workflows/apply-product-patch.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-friend-exchange-product-patch
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/free-supabase-market-refinement
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-test.txt
+
+      - name: Reconstruct and apply the bounded patch
+        run: |
+          base64 --decode .patch/gamekelder_patch.tar.gz.b64 > /tmp/gamekelder-patch.tar.gz
+          echo "3b74a957b6771866bf08ad8e72a49526ef7e973a3330e2f3eb31af7fe9c53cc3  /tmp/gamekelder-patch.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file /tmp/gamekelder-patch.tar.gz --directory .
+          rm -f .patch/gamekelder_patch.tar.gz.b64
+          rmdir .patch 2>/dev/null || true
+
+      - name: Install browser test runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-test.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Verify syntax, engines and browser flows
+        run: |
+          npm run check
+          npm run test:unit
+          npm run test:browser
+
+      - name: Commit the verified product patch
+        run: |
+          git config user.name "Friend Exchange QA Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && { echo "No patch changes found"; exit 1; }
+          git commit -m "feat: add free online rooms and visible market settlement"
+          git push origin HEAD:feat/free-supabase-market-refinement
+
+      - name: Upload browser artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staged-product-patch-artifacts
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
