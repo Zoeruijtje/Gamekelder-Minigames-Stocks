@@ -1,5 +1,11 @@
 @import url("responsive.css");
 
+/*
+ * The gamekelder artwork is stored at its original 1536 × 864 resolution.
+ * Both desktop and phone layouts use the same high-quality source; phones
+ * change only the focal point and overlay so no low-resolution derivative is
+ * stretched across the viewport.
+ */
 .environment {
   inset: 0 !important;
   z-index: 0 !important;
@@ -32,8 +38,8 @@
   .environment {
     background-image:
       linear-gradient(180deg, rgba(8, 10, 10, 0.08), rgba(8, 10, 10, 0.25)),
-      url("assets/gamekelder-bg-mobile.webp");
-    background-position: center center;
+      url("assets/gamekelder-bg.webp");
+    background-position: 55% center;
     transform: none;
     animation: none;
   }
