@@ -26,11 +26,13 @@ function makePlayer(source, index) {
     ticker: sanitizeTicker(source.ticker, `P${index + 1}`),
     color: source.color || '#9a8f78',
     isBot: Boolean(source.isBot),
-    connected: true,
-    ready: false,
+    connected: source.connected !== false,
+    ready: Boolean(source.ready),
     ratings: source.ratings ? structuredClone(source.ratings) : defaultRatings(),
     xp: Number(source.xp ?? 0),
     achievements: [...(source.achievements ?? [])],
+    role: source.role ?? (index === 0 ? 'host' : 'player'),
+    seat: Number(source.seat ?? index + 1),
   };
 }
 
@@ -70,6 +72,7 @@ export function createFriendMarket(players) {
       name: player.name,
       ownerId: player.id,
       price,
+      previousPrice: price,
       openPrice: price,
       roundChange: 0,
       sessionChange: 0,
@@ -85,6 +88,22 @@ export function createAccounts(players, settings) {
   return {
     friend: Object.fromEntries(players.map((player) => [player.id, createAccount(player.id, settings.startingFriendCash)])),
     real: Object.fromEntries(players.map((player) => [player.id, createAccount(player.id, settings.startingRealCash)])),
+  };
+}
+
+function onlineDefaults() {
+  return {
+    enabled: Boolean(globalThis.__FE_SUPABASE__?.url && globalThis.__FE_SUPABASE__?.publishableKey),
+    status: 'idle',
+    roomId: null,
+    roomCode: null,
+    userId: null,
+    isHost: false,
+    lastSyncAt: null,
+    realtimeStatus: 'disconnected',
+    error: null,
+    gameQueue: [],
+    presenceCount: 0,
   };
 }
 
@@ -132,6 +151,7 @@ export function createInitialState() {
     },
     accounts: createAccounts(players, DEFAULT_SETTINGS),
     achievements: structuredClone(ACHIEVEMENTS),
+    online: onlineDefaults(),
     ui: {
       activeView: 'overview',
       modal: null,
@@ -142,6 +162,7 @@ export function createInitialState() {
       controllerMode: false,
       gameRuntime: null,
       quoteTick: 0,
+      onlineBusy: false,
     },
   };
 }
@@ -150,7 +171,24 @@ export function normalizeState(raw) {
   if (!raw || raw.schemaVersion !== APP_VERSION) return createInitialState();
   const state = structuredClone(raw);
   state.players = uniqueTickers((state.players ?? []).map(makePlayer));
-  if (state.players.length < 2) return createInitialState();
+  if (state.players.length < 1 || (state.players.length < 2 && state.mode !== 'online')) return createInitialState();
+  state.online = { ...onlineDefaults(), ...(state.online ?? {}) };
+  state.ui = {
+    activeView: 'overview',
+    modal: null,
+    selectedAsset: null,
+    selectedMarket: 'friend',
+    selectedPlayerId: state.profilePlayerId ?? state.players[0].id,
+    toast: null,
+    controllerMode: false,
+    gameRuntime: null,
+    quoteTick: 0,
+    onlineBusy: false,
+    ...(state.ui ?? {}),
+  };
+  if (!state.players.some((player) => player.id === state.ui.selectedPlayerId)) {
+    state.ui.selectedPlayerId = state.profilePlayerId ?? state.players[0].id;
+  }
   state.updatedAt = nowIso();
   return state;
 }
@@ -181,8 +219,7 @@ export function updateSettings(state, updates) {
     tradingSeconds: clamp(Number(updates.tradingSeconds ?? next.settings.tradingSeconds), 10, 90),
   };
   next.session.roundCount = next.settings.roundCount;
-  next.accounts = createAccounts(next.players, next.settings);
+  if (next.mode !== 'online') next.accounts = createAccounts(next.players, next.settings);
   next.updatedAt = nowIso();
   return next;
 }
-

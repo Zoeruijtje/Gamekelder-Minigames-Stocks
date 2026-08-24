@@ -34,7 +34,43 @@ function combinedPortfolioSeries(state, player) {
     .map((value, index, items) => index === items.length - 1 ? base : value);
 }
 
+function onlineSubmissionStatus(state, round) {
+  const active = state.players.filter((player) => player.role !== 'spectator' && player.connected !== false);
+  const submitted = active.filter((player) => round.submissions[player.id]);
+  return {
+    active,
+    submitted,
+    allSubmitted: active.length > 0 && submitted.length === active.length,
+    currentSubmitted: Boolean(round.submissions[state.online?.userId]),
+  };
+}
+
 function roundActions(state, round) {
+  if (state.mode === 'online') {
+    const status = onlineSubmissionStatus(state, round);
+    switch (round.phase) {
+      case PHASES.TRADING:
+        return state.online.isHost
+          ? `<button class="button button--danger full-width" data-action="lock-trading">LOCK ONLINE TRADING <span>${state.settings.tradingSeconds}s WINDOW</span></button>`
+          : '<div class="round-wait"><i class="live-dot"></i><span><b>Trading is open</b><small>Build your fictional Friend Market position before the host locks the bell.</small></span></div>';
+      case PHASES.LOCKED:
+        return state.online.isHost
+          ? '<button class="button button--warm full-width" data-action="begin-game">START MINIGAME ON EVERY DEVICE</button>'
+          : '<div class="round-wait"><i></i><span><b>Trading locked</b><small>The host is preparing the minigame.</small></span></div>';
+      case PHASES.GAME:
+        if (!status.currentSubmitted) return '<button class="button button--warm full-width" data-action="resume-game">PLAY YOUR PRIVATE ROUND</button>';
+        if (state.online.isHost && status.allSubmitted) return '<button class="button button--warm full-width settlement-button" data-action="online-settle-round">SETTLE RESULTS & MOVE THE MARKET</button>';
+        if (state.online.isHost && phaseCountdown(state) === 0) return '<button class="button button--danger full-width" data-action="online-force-settle">DEADLINE PASSED · SETTLE MISSING PLAYERS AT ZERO</button>';
+        return `<div class="round-wait"><i class="live-dot"></i><span><b>${status.submitted.length}/${status.active.length} submissions locked</b><small>Your answer is private. Waiting for the rest of the room.</small></span></div>`;
+      case PHASES.SETTLING:
+        return '<button class="button full-width" disabled>AUTHORITATIVE MARKET SETTLEMENT…</button>';
+      case PHASES.RESULTS:
+        return '<button class="button button--warm full-width" data-action="show-results">VIEW THE MARKET MOVE</button>';
+      default:
+        return '<button class="button full-width" disabled>SYNCING ROOM STATE</button>';
+    }
+  }
+
   switch (round.phase) {
     case PHASES.BRIEFING:
       return `<button class="button button--warm full-width" data-action="open-trading">OPEN ${state.settings.tradingSeconds}s TRADING WINDOW</button>`;
@@ -45,10 +81,39 @@ function roundActions(state, round) {
     case PHASES.GAME:
       return '<button class="button button--warm full-width" data-action="resume-game">RESUME MINIGAME</button>';
     case PHASES.RESULTS:
-      return '<button class="button button--warm full-width" data-action="show-results">VIEW SETTLEMENT</button>';
+      return '<button class="button button--warm full-width" data-action="show-results">VIEW MARKET SETTLEMENT</button>';
     default:
       return '<button class="button full-width" disabled>PROCESSING</button>';
   }
+}
+
+function portfolioRoundImpact(state, round, player) {
+  const account = state.accounts.friend[player.id];
+  if (!account || !round?.marketMoves?.length) return 0;
+  return round.marketMoves.reduce((total, move) => {
+    const asset = state.markets.friend[move.playerId];
+    const quantity = account.positions[asset?.symbol]?.quantity ?? 0;
+    return total + quantity * ((move.newPrice ?? asset?.price ?? 0) - (move.oldPrice ?? asset?.previousPrice ?? asset?.price ?? 0));
+  }, 0);
+}
+
+function marketMovementCard(state, round, player) {
+  if (!round?.marketMoves?.length || ![PHASES.RESULTS, PHASES.COMPLETE].includes(round.phase)) return '';
+  const moves = [...round.marketMoves].sort((left, right) => right.return - left.return);
+  const winner = moves[0];
+  const loser = moves.at(-1);
+  const winnerPlayer = state.players.find((candidate) => candidate.id === winner.playerId);
+  const loserPlayer = state.players.find((candidate) => candidate.id === loser.playerId);
+  const impact = portfolioRoundImpact(state, round, player);
+  return `<article class="movement-card glass">
+    <div class="card-topline"><span class="eyebrow">LAST AUTHORITATIVE REPRICE</span><button class="text-button" data-action="show-results">FULL SETTLEMENT →</button></div>
+    <div class="movement-card__headline"><span class="movement-pulse"></span><div><small>YOUR PORTFOLIO IMPACT THIS ROUND</small><strong class="${impact >= 0 ? 'positive' : 'negative'}">${signedMoney(impact)}</strong></div></div>
+    <div class="movement-card__moves">
+      <div class="movement-card__move movement-card__move--up"><small>BIGGEST GAIN</small><b>${escapeHtml(winnerPlayer?.ticker ?? '')}</b><span>${money(winner.oldPrice)} → ${money(winner.newPrice)}</span><em>${signedPercent(winner.return * 100)}</em></div>
+      <div class="movement-card__move movement-card__move--down"><small>BIGGEST DROP</small><b>${escapeHtml(loserPlayer?.ticker ?? '')}</b><span>${money(loser.oldPrice)} → ${money(loser.newPrice)}</span><em>${signedPercent(loser.return * 100)}</em></div>
+    </div>
+    <p>Prices move on performance versus expectation. A highly rated favourite must outperform more than an underdog to earn the same rally.</p>
+  </article>`;
 }
 
 export function overview(state) {
@@ -62,11 +127,12 @@ export function overview(state) {
   const game = round ? getGame(round.gameId) : null;
   const friendAssets = Object.values(state.markets.friend);
   return `<section class="view-section">
-    <div class="view-heading"><div><span class="eyebrow">PORTFOLIO / LIVE SESSION</span><h1>MARKET NIGHT</h1><p>Trade the room, then play the round that settles the Friend Market.</p></div>${marketStateCard(state)}</div>
+    <div class="view-heading"><div><span class="eyebrow">PORTFOLIO / ${state.mode === 'online' ? `ONLINE ROOM ${escapeHtml(state.online.roomCode ?? '')}` : 'LIVE SESSION'}</span><h1>MARKET NIGHT</h1><p>Trade the room, play the minigame, then watch the Friend Market reprice in a visible settlement.</p></div>${marketStateCard(state)}</div>
     <div class="dashboard-grid">
-      <article class="portfolio-hero glass"><div class="card-topline"><span class="eyebrow">COMBINED FICTIONAL EQUITY</span><span class="feed-label">DEMO + SESSION</span></div><div class="hero-value-row"><div><strong>${money(total)}</strong><em class="${pnl >= 0 ? 'positive' : 'negative'}">${signedMoney(pnl)} · ${signedPercent((pnl / starting) * 100)}</em></div><div class="mini-stats"><span>Real market<b>${money(realSnapshot.equity)}</b></span><span>Friend market<b>${money(friendSnapshot.equity)}</b></span><span>Cash<b>${money(realSnapshot.cash + friendSnapshot.cash)}</b></span></div></div>${lineChart(combinedPortfolioSeries(state, player))}<div class="chart-axis"><span>09:30</span><span>11:00</span><span>12:30</span><span>14:00</span><span>15:30</span><span>17:00</span></div></article>
+      <article class="portfolio-hero glass"><div class="card-topline"><span class="eyebrow">COMBINED FICTIONAL EQUITY</span><span class="feed-label">${state.mode === 'online' ? 'ONLINE FRIEND + DEMO REAL' : 'DEMO + SESSION'}</span></div><div class="hero-value-row"><div><strong>${money(total)}</strong><em class="${pnl >= 0 ? 'positive' : 'negative'}">${signedMoney(pnl)} · ${signedPercent((pnl / starting) * 100)}</em></div><div class="mini-stats"><span>Real market<b>${money(realSnapshot.equity)}</b></span><span>Friend market<b>${money(friendSnapshot.equity)}</b></span><span>Cash<b>${money(realSnapshot.cash + friendSnapshot.cash)}</b></span></div></div>${lineChart(combinedPortfolioSeries(state, player))}<div class="chart-axis"><span>09:30</span><span>11:00</span><span>12:30</span><span>14:00</span><span>15:30</span><span>17:00</span></div></article>
       ${round ? `<article class="round-card glass"><div class="card-topline"><span class="eyebrow">ROUND ${round.index + 1} / ${state.session.roundCount}</span><span class="live-pill">${state.session.phase}</span></div><span class="round-category">${escapeHtml(CATEGORY_LABELS[game.category])}</span><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description)}</p><div class="round-actions">${roundActions(state, round)}</div></article>` : ''}
-      <article class="holdings-card glass"><div class="card-topline"><span class="eyebrow">FRIEND MARKET</span><button class="text-button" data-action="view" data-view="market">OPEN MARKET →</button></div><div class="asset-table">${friendAssets.map((asset) => { const owner = state.players.find((candidate) => candidate.id === asset.ownerId); return `<button class="asset-row" data-action="trade-asset" data-market="friend" data-symbol="${asset.symbol}">${playerAvatar(owner)}<span><strong>${asset.symbol}</strong><small>${escapeHtml(asset.name)}</small></span><b>${money(asset.price)}</b><em class="${asset.sessionChange >= 0 ? 'positive' : 'negative'}">${signedPercent(asset.sessionChange)}</em>${sparkline(asset.history.map((point) => point.price), asset.sessionChange >= 0 ? '' : 'is-negative')}</button>`; }).join('')}</div></article>
+      ${marketMovementCard(state, round, player)}
+      <article class="holdings-card glass"><div class="card-topline"><span class="eyebrow">FRIEND MARKET</span><button class="text-button" data-action="view" data-view="market">OPEN MARKET →</button></div><div class="asset-table">${friendAssets.map((asset) => { const owner = state.players.find((candidate) => candidate.id === asset.ownerId); return `<button class="asset-row" data-action="trade-asset" data-market="friend" data-symbol="${asset.symbol}">${playerAvatar(owner)}<span><strong>${asset.symbol}</strong><small>${escapeHtml(asset.name)}</small></span><b>${money(asset.price)}</b><em class="${asset.roundChange >= 0 ? 'positive' : 'negative'}">${signedPercent(asset.roundChange)}</em>${sparkline(asset.history.map((point) => point.price), asset.roundChange >= 0 ? '' : 'is-negative')}</button>`; }).join('')}</div></article>
       <article class="impact-card glass"><span class="eyebrow">SESSION INTELLIGENCE</span><div class="impact-list">${[...friendAssets].sort((left, right) => right.sessionChange - left.sessionChange).map((asset) => `<div><b>${asset.symbol}</b><span>${asset.sentiment}</span><em class="${asset.sessionChange >= 0 ? 'positive' : 'negative'}">${signedPercent(asset.sessionChange)}</em></div>`).join('')}</div></article>
       <article class="news-teaser glass"><span class="eyebrow">THE KELDER WIRE</span><h3>${escapeHtml(state.session.news[0]?.headline ?? 'MARKET AWAITS OPENING BELL')}</h3><p>${escapeHtml(state.session.news[0]?.summary ?? '')}</p><button class="text-button" data-action="view" data-view="news">READ MARKET NEWS →</button></article>
     </div>

@@ -66,11 +66,13 @@ function nav(state) {
 export function appHeader(state) {
   const selected = state.players.find((player) => player.id === state.ui.selectedPlayerId) ?? state.players[0];
   const round = currentRound(state);
+  const online = state.mode === 'online';
   return `<header class="app-header glass">
-    <button class="brand" data-action="route" data-route="${state.session.status === PHASES.LOBBY ? 'landing' : 'session'}"><span class="brand-mark">FE</span><span><strong>FRIEND EXCHANGE</strong><small>${state.session.status === 'active' ? `ROUND ${state.session.roundIndex + 1} · ${round ? getGame(round.gameId).name : 'LIVE'}` : 'GAMEKELDER'}</small></span></button>
+    <button class="brand" data-action="route" data-route="${state.session.status === PHASES.LOBBY ? 'landing' : 'session'}"><span class="brand-mark">FE</span><span><strong>FRIEND EXCHANGE</strong><small>${online ? `ROOM ${escapeHtml(state.online.roomCode ?? '------')}` : state.session.status === 'active' ? `ROUND ${state.session.roundIndex + 1} · ${round ? getGame(round.gameId).name : 'LIVE'}` : 'GAMEKELDER'}</small></span></button>
     ${state.route === 'session' ? nav(state) : '<div></div>'}
     <div class="header-actions">
-      ${state.route === 'session' ? `<button class="status-chip" data-action="switch-player">${playerAvatar(selected)}<span><small>Playing as</small><b>${escapeHtml(selected.name)}</b></span></button>` : ''}
+      ${online ? `<span class="header-online-status ${state.online.realtimeStatus === 'SUBSCRIBED' ? 'is-live' : ''}"><i></i><b>${state.online.realtimeStatus === 'SUBSCRIBED' ? 'ONLINE' : 'SYNCING'}</b></span>` : ''}
+      ${state.route === 'session' ? `<button class="status-chip" data-action="switch-player" ${online ? 'disabled' : ''}>${playerAvatar(selected)}<span><small>${online ? 'Signed in as' : 'Playing as'}</small><b>${escapeHtml(selected.name)}</b></span></button>` : ''}
       <button class="icon-button" data-action="open-controller" title="Open controller tab">↗</button>
     </div>
   </header>`;
@@ -79,4 +81,3 @@ export function appHeader(state) {
 export function environment() {
   return '<div class="environment" aria-hidden="true"></div><div class="environment-vignette" aria-hidden="true"></div><div class="grain" aria-hidden="true"></div>';
 }
-

@@ -1,7 +1,7 @@
-// Public runtime configuration only. This file may contain a Supabase project
-// URL and publishable key after a dedicated backend is provisioned.
-// Never place a secret/service-role or market-provider key in this file.
-window.__FE_SUPABASE__ = window.__FE_SUPABASE__ || {
-  url: "",
-  publishableKey: ""
+// Public runtime configuration only. Supabase publishable keys are designed for
+// browser use and are constrained by Row Level Security. Never place a secret
+// key, service-role key, database password or market-provider key in this file.
+window.__FE_SUPABASE__ = {
+  url: "https://knndezzbjzcykysasfnw.supabase.co",
+  publishableKey: "sb_publishable_g-TmoO3QGY9RcH7maF27Xw_7gwqrnMl"
 };
