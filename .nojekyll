@@ -1,1 +1,1 @@
-# GitHub Pages: serve this repository as static files without Jekyll processing.
+# Keep GitHub Pages from processing ES module source directories with Jekyll.

@@ -1,104 +1,102 @@
-# Current Architecture
+# Architecture
 
-## Deployment model
+## Current deployment
 
-The current application is a no-build static site intended for GitHub Pages.
-
-```text
-index.html
-  ├─ styles.css
-  ├─ background.css
-  ├─ responsive.css
-  ├─ app.js
-  └─ assets/*.webp
-```
-
-There is no framework, package bundle or server dependency in the production frontend.
-
-## UI composition
-
-### `index.html`
-
-Defines six views:
-
-1. Overview
-2. Market
-3. Portfolio
-4. Minigames
-5. Leaderboard
-6. News
-
-It also contains the paper-order dialog and minigame dialog.
-
-### `styles.css`
-
-Defines the base design system:
-
-- warm luxury palette;
-- Bebas Neue display typography and Inter body typography;
-- frosted/smoked glass surfaces;
-- desktop grid;
-- financial tables, charts and cards;
-- market, portfolio, game, news and dialog components.
-
-### `background.css`
-
-Owns the cinematic room layer separately from component styling.
-
-- desktop uses `assets/gamekelder-bg.webp`;
-- phones use `assets/gamekelder-bg-mobile.webp`;
-- visual overlays are deliberately restrained;
-- phone background movement is disabled for stability.
-
-### `responsive.css`
-
-Owns responsive constraints rather than scattering emergency overrides through component CSS. Its primary purpose is to preserve layout invariants and prevent wide children from changing page width.
-
-### `app.js`
-
-Provides the current local-only application logic:
-
-- default fake portfolio and friend-stock state;
-- `localStorage` persistence;
-- simulated real-market price movement;
-- paper buy/sell orders;
-- portfolio and allocation calculations;
-- friend-stock repricing;
-- five minigames;
-- leaderboard, ticker, news and activity rendering;
-- view switching and dialogs.
-
-## State boundary
-
-The current state is deliberately local:
+The local product is a zero-build static application suitable for GitHub Pages:
 
 ```text
-Browser localStorage
-└─ friendExchangeStateV1
+GitHub Pages
+  ├─ HTML/CSS
+  ├─ native ES modules
+  ├─ localStorage persistence
+  ├─ BroadcastChannel tab synchronization
+  └─ high-quality local image assets
 ```
 
-This makes the GitHub Pages prototype functional without a backend, but it is not shared between devices and must not be treated as authoritative multiplayer state.
+No package runtime or hosted application server is required for local mode.
 
-## Future service seams
+## State model
 
-The frontend already separates concepts that will later map to backend services:
+The store contains:
 
-| Current concept | Future backend owner |
-|---|---|
-| Player/profile | Supabase Auth + `profiles` |
-| Room code/presence | Supabase Realtime |
-| Portfolio and orders | Postgres + transactional RPC/Edge Function |
-| Friend-stock price | Authoritative round settlement function |
-| Minigame result | Signed/validated room event |
-| Market-data quote | Edge Function proxy |
-| News/activity | Database events/materialized feed |
+- players and category ratings;
+- room/session settings;
+- explicit round state machine;
+- real and Friend Market quote state;
+- separate real/friend accounts;
+- positions and immutable fill ledgers;
+- rounds, submissions, results and price events;
+- XP, achievements, news and activity;
+- view/modal/controller state.
 
-## Security boundary
+State writes are immutable at the engine boundary and persisted through `LocalStateTransport`.
 
-Anything shipped by GitHub Pages is public. Therefore:
+## Round state machine
 
-- no market-data provider secret may be placed in frontend files;
-- no Supabase secret or service-role key may be placed in frontend files;
-- the future browser client may contain only a Supabase publishable key;
-- Row Level Security must be enabled before exposing database tables;
-- authoritative settlement and third-party API calls belong in Edge Functions.
+```text
+lobby
+  → briefing
+  → trading
+  → locked
+  → game
+  → settling
+  → results
+  → next briefing or complete
+```
+
+Friend Market orders are accepted only in `trading`. Results are settled once and then become immutable for that round.
+
+## Domain engines
+
+### Portfolio engine
+
+- validates quotes and order side;
+- supports fractional quantities;
+- prevents negative cash and overselling;
+- calculates weighted average cost;
+- records realised P/L;
+- implements idempotency keys;
+- derives equity and unrealised P/L.
+
+### Minigame engine
+
+Every game exposes:
+
+- deterministic configuration from a seed;
+- submission scoring;
+- bot simulation for local play;
+- normalized score from 0 to 1;
+- tie-break value and human-readable result.
+
+Group games implement room-level scoring where one player’s result depends on others.
+
+### Friend Market pricing
+
+1. Read category-specific player ratings.
+2. Calculate expected percentile.
+3. Rank actual normalized scores.
+4. Calculate performance surprise.
+5. Add small placement/performance signals.
+6. Center the room’s returns.
+7. Apply volatility-specific circuit breakers.
+8. Enforce a €5 fictional price floor.
+9. Update category ratings.
+10. Generate financial-news explanations.
+
+## Online architecture
+
+```text
+GitHub Pages browser
+      │ public URL + publishable key
+      ▼
+Supabase Auth / Data API / private Realtime
+      │
+      ├─ Postgres + RLS (authoritative persistent state)
+      ├─ settle-round Edge Function
+      └─ market-quotes Edge Function
+             │ server-side provider secret
+             ▼
+        market-data provider
+```
+
+The browser is never authoritative for shared cash, final prices, scores or settlement.

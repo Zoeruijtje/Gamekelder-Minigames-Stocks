@@ -1,0 +1,10 @@
+{
+  "name": "Friend Exchange — Gamekelder",
+  "short_name": "Friend Exchange",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#171310",
+  "theme_color": "#171310",
+  "description": "Fake-money stock trading and party minigames.",
+  "icons": []
+}
