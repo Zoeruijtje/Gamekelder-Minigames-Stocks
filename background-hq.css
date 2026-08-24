@@ -1,0 +1,34 @@
+:root{
+  --gamekelder-background:url("assets/gamekelder-bg.webp");
+}
+
+.environment{
+  background-image:
+    linear-gradient(90deg,rgba(10,10,9,.62) 0%,rgba(10,10,9,.32) 37%,rgba(10,10,9,.08) 68%,rgba(10,10,9,.26) 100%),
+    linear-gradient(180deg,rgba(11,8,6,.03),rgba(5,7,7,.35)),
+    var(--gamekelder-background)!important;
+}
+
+html[data-background-state="loading"] .environment{
+  filter:saturate(.96) brightness(.96);
+}
+
+html[data-background-state="ready"] .environment{
+  filter:saturate(1.02) contrast(1.01);
+  transition:filter .55s ease;
+}
+
+@media(max-width:760px){
+  .environment{
+    background-image:
+      linear-gradient(180deg,rgba(8,10,10,.10),rgba(8,10,10,.27)),
+      var(--gamekelder-background)!important;
+    background-position:55% center!important;
+    transform:none!important;
+    animation:none!important;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  html[data-background-state="ready"] .environment{transition:none}
+}

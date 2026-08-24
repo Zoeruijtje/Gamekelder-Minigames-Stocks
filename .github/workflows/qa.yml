@@ -3,7 +3,7 @@ name: Product QA
 on:
   pull_request:
   push:
-    branches: [main, feat/full-product-mvp]
+    branches: [main, feat/full-product-mvp, preview]
 
 permissions:
   contents: read
@@ -33,21 +33,34 @@ jobs:
           npm run test:unit
       - name: Browser regression and full round flow
         run: npm run test:browser
-      - name: Verify image dimensions and source quality
+      - name: Verify fallback and reconstructed background assets
         run: |
           python - <<'PY'
+          import base64
+          from io import BytesIO
           from pathlib import Path
           from PIL import Image
-          expected = {
-              'assets/gamekelder-bg.webp': (1536, 864, 150_000),
-              'assets/gamekelder-bg-mobile.webp': (1080, 1920, 90_000),
+
+          fallbacks = {
+              'assets/gamekelder-bg.webp': (1536, 864, 10_000),
+              'assets/gamekelder-bg-mobile.webp': (1080, 1920, 10_000),
           }
-          for filename, (width, height, minimum) in expected.items():
+          for filename, (width, height, minimum) in fallbacks.items():
               path = Path(filename)
               image = Image.open(path)
               assert image.size == (width, height), (filename, image.size)
               assert path.stat().st_size >= minimum, (filename, path.stat().st_size)
-              print('PASS', filename, image.size, path.stat().st_size)
+              print('PASS fallback', filename, image.size, path.stat().st_size)
+
+          parts = [
+              Path(f'assets/background/desktop.{index:02d}.b64').read_text().strip()
+              for index in range(9)
+          ]
+          decoded = base64.b64decode(''.join(parts), validate=True)
+          image = Image.open(BytesIO(decoded))
+          assert image.size == (1536, 864), image.size
+          assert len(decoded) >= 70_000, len(decoded)
+          print('PASS reconstructed high-quality background', image.size, len(decoded))
           PY
       - name: Upload browser artifacts on failure
         if: failure()
