@@ -1,0 +1,212 @@
+/*
+  Responsive invariants:
+  1. No top-level horizontal scrolling at any supported viewport.
+  2. The environment always fills the visual viewport and remains visible through the glass.
+  3. Wide data tables scroll inside their own card instead of widening the page.
+  4. Mobile is a true single-column composition, not a scaled desktop dashboard.
+*/
+
+html, body { width: 100%; max-width: 100%; overflow-x: clip; }
+img, svg, canvas, video { max-width: 100%; }
+.shell, .workspace, .main-stage, .view, .overview-grid, .market-layout, .portfolio-layout,
+.leaderboard-layout, .news-layout, .game-grid, .right-rail, .ticker { min-width: 0; max-width: 100%; }
+.overview-grid > *, .market-layout > *, .portfolio-layout > *, .leaderboard-layout > *,
+.news-layout > *, .game-grid > * { min-width: 0; max-width: 100%; }
+.holdings-card, .full-holdings-card, .market-panel { overflow: hidden; }
+.holdings-table-wrap { max-width: 100%; overflow-x: auto; }
+
+@media (max-width: 1320px) {
+  .workspace { grid-template-columns: 165px minmax(0, 1fr); }
+  .right-rail { display: none; }
+  .topbar { grid-template-columns: 260px minmax(0, 1fr) auto; }
+  .overview-grid { grid-template-columns: minmax(0, 1fr) 255px; }
+}
+
+@media (max-width: 1000px) {
+  .shell { width: min(100% - 20px, 920px); }
+  .topbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .topnav { display: none; }
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .sidebar {
+    min-height: auto;
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 3px;
+    padding: 7px;
+  }
+  .sidebar-heading, .sidebar-spacer, .room-card, .feed-status { display: none; }
+  .side-link { min-width: 0; justify-content: center; padding: 10px 5px; white-space: nowrap; }
+  .side-link span { display: none; }
+  .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "hero" "round" "holdings" "impact" "highlights";
+  }
+  .market-layout, .portfolio-layout, .leaderboard-layout, .news-layout { grid-template-columns: minmax(0, 1fr); }
+  .portfolio-layout { grid-template-areas: "balance" "allocation" "positions"; }
+  .game-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .session-highlights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .highlight-title { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .highlight:nth-child(3), .highlight:nth-child(5) { border-right: 0; }
+  .view-header { padding-inline: 4px; }
+}
+
+@media (max-width: 760px) {
+  :root { --radius: 18px; --radius-sm: 12px; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  .shell { width: calc(100% - 14px); padding: 7px 0 16px; }
+
+  .glass {
+    background: linear-gradient(145deg, rgba(31, 30, 27, 0.27), rgba(13, 15, 15, 0.16));
+    border-color: rgba(255,255,255,.18);
+    box-shadow: inset 0 1px rgba(255,255,255,.12), 0 14px 40px rgba(0,0,0,.17);
+    backdrop-filter: blur(16px) saturate(108%);
+    -webkit-backdrop-filter: blur(16px) saturate(108%);
+  }
+  .glass--quiet { background: linear-gradient(145deg, rgba(31, 29, 26, 0.29), rgba(12, 14, 14, 0.18)); }
+  .glass--dark { background: linear-gradient(150deg, rgba(11, 13, 13, 0.42), rgba(16, 17, 17, 0.27)); }
+  .glass--smoke { background: linear-gradient(145deg, rgba(18, 20, 19, 0.36), rgba(22, 20, 18, 0.22)); }
+  .glass--light { background: linear-gradient(145deg, rgba(239, 225, 205, 0.20), rgba(255,255,255,.075)); }
+
+  .topbar {
+    min-height: 60px;
+    height: auto;
+    padding: 8px 10px;
+    top: max(5px, env(safe-area-inset-top));
+    gap: 8px;
+    border-radius: 16px;
+  }
+  .brand { gap: 9px; }
+  .brand-mark { width: 38px; height: 38px; border-radius: 10px; font-size: 21px; }
+  .brand-copy strong { font-size: clamp(17px, 5.2vw, 21px); letter-spacing: .075em; }
+  .brand-copy small, .account-balance, .profile-chip > span:nth-child(2), .chev, .icon-button { display: none; }
+  .profile-chip { padding: 0; }
+  .profile-chip .avatar { width: 38px; height: 38px; }
+
+  .workspace { padding-top: 7px; gap: 8px; }
+  .sidebar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .side-link { font-size: 9px; min-height: 42px; padding: 8px 4px; overflow: hidden; text-overflow: ellipsis; }
+
+  .view-header {
+    min-height: auto;
+    display: block;
+    padding: 26px 8px 17px;
+  }
+  .view-header h1 { font-size: clamp(35px, 10.5vw, 46px); line-height: .9; margin-top: 10px; white-space: normal; overflow-wrap: break-word; letter-spacing: .045em; }
+  .view[data-view="overview"] .view-header h1 { white-space: nowrap; font-size: clamp(35px, 10.5vw, 46px); }
+  .view-header p { max-width: 34rem; font-size: 10px; line-height: 1.55; }
+  .market-state { display: none; }
+
+  .overview-grid { gap: 9px; }
+  .portfolio-hero { min-height: 440px; padding: 20px 18px 14px; }
+  .card-topline { align-items: flex-start; }
+  .range-tabs {
+    max-width: 48%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .range-tabs::-webkit-scrollbar { display: none; }
+  .range-tabs button { padding: 6px 9px; }
+  .portfolio-value-row { display: block; margin-top: 22px; }
+  .hero-value { font-size: clamp(45px, 14vw, 64px); }
+  .portfolio-mini-stats { margin-top: 18px; gap: 28px; }
+  .portfolio-mini-stats span { font-size: 8px; }
+  .portfolio-mini-stats strong { font-size: 11px; }
+  .chart-shell { height: 260px; margin-top: 20px; }
+  .chart-labels { left: 26px; font-size: 6px; }
+
+  .live-round { padding: 20px 18px; }
+  .live-round h2 { font-size: 38px; margin-top: 13px; }
+  .round-timer { font-size: 60px; }
+  .rank-row { font-size: 10px; grid-template-columns: 18px 27px minmax(0, 1fr) auto; }
+  .rank-avatar { width: 25px; height: 25px; }
+  .rank-time { font-size: 9px; }
+  .live-round .primary-button { min-height: 46px; margin-top: 20px; }
+
+  .holdings-card, .market-impact, .full-holdings-card, .market-panel, .leaderboard-card { padding: 17px 15px; }
+  .holdings-card .card-topline { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .segment-control { max-width: 100%; overflow-x: auto; width: max-content; }
+  .holdings-table { min-width: 560px; }
+  .holdings-table th { font-size: 7px; padding: 8px 7px; }
+  .holdings-table td { font-size: 8px; padding: 10px 7px; }
+  .holdings-table-wrap {
+    margin-inline: -2px;
+    padding-bottom: 5px;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(90deg, #000 0 calc(100% - 18px), transparent);
+  }
+
+  .impact-row { grid-template-columns: 38px 52px minmax(0, 1fr); font-size: 9px; }
+  .session-highlights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .highlight-title { grid-column: 1 / -1; }
+  .highlight { min-height: 92px; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .highlight:nth-child(3), .highlight:nth-child(5) { border-right: 0; }
+  .highlight em { font-size: 22px; }
+
+  .asset-grid, .game-grid { grid-template-columns: minmax(0, 1fr); }
+  .asset-card { min-height: 160px; }
+  .friend-stock-row { grid-template-columns: 31px minmax(0, 1fr) auto; }
+  .friend-row-spark { grid-column: 2 / -1; width: 100%; }
+  .game-card { min-height: 225px; }
+
+  .allocation-visual { flex-direction: column; align-items: center; gap: 22px; }
+  .allocation-legend { width: 100%; }
+  .balance-card { min-height: auto; }
+  .leaderboard-row { grid-template-columns: 26px 31px minmax(0, 1fr); }
+  .leaderboard-value { grid-column: 3; text-align: left; margin-top: 4px; }
+  .news-feature { min-height: 390px; padding: 22px; }
+  .news-feature h2 { font-size: 38px; overflow-wrap: anywhere; word-break: break-word; }
+
+  .ticker {
+    position: sticky;
+    bottom: max(6px, env(safe-area-inset-bottom));
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    min-height: 42px;
+    margin-top: 9px;
+    padding: 8px 11px;
+  }
+  .ticker-note { display: none; }
+  .ticker-track { gap: 19px; }
+
+  .modal-panel { left: 7px; right: 7px; bottom: 7px; top: auto; width: auto; transform: none; max-height: calc(100dvh - 14px); overflow-y: auto; padding: 22px 18px; }
+  .trade-title-row { align-items: flex-start; }
+  .trade-controls { grid-template-columns: minmax(0, 1fr); }
+  .game-panel { inset: 7px; padding: 18px 14px; max-height: calc(100dvh - 14px); }
+  .game-modal-header h2 { font-size: 38px; }
+  .game-market-badge { display: none; }
+  .game-stage { min-height: 400px; }
+  .game-core .huge { font-size: 72px; }
+  .reaction-pad { width: 100%; height: 265px; }
+  .memory-grid { grid-template-columns: repeat(4, minmax(0, 58px)); gap: 7px; }
+  .memory-cell { width: 58px; height: 58px; }
+  .choice-row { flex-direction: column; }
+  .choice-row button { width: 100%; min-width: 0; }
+  .results-table { min-width: 460px; }
+  .game-results { overflow-x: auto; }
+}
+
+@media (max-width: 380px) {
+  .shell { width: calc(100% - 10px); }
+  .brand-copy strong { font-size: 16px; }
+  .brand-mark, .profile-chip .avatar { width: 35px; height: 35px; }
+  .side-link { font-size: 8px; }
+  .view-header { padding-inline: 5px; }
+  .portfolio-hero { padding-inline: 14px; }
+  .hero-value { font-size: 46px; }
+  .range-tabs { max-width: 44%; }
+  .chart-shell { height: 235px; }
+  .memory-grid { grid-template-columns: repeat(4, minmax(0, 52px)); }
+  .memory-cell { width: 52px; height: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .environment { transform: none; }
+}

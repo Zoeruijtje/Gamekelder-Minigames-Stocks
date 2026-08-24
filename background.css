@@ -1,24 +1,46 @@
-.environment{
-  z-index:0 !important;
-  pointer-events:none;
+@import url("responsive.css");
+
+.environment {
+  inset: 0 !important;
+  z-index: 0 !important;
+  width: 100vw;
+  height: 100vh;
+  height: 100svh;
+  min-height: 100dvh;
+  pointer-events: none;
   background-image:
-    linear-gradient(90deg,rgba(10,12,12,.64) 0%,rgba(10,12,12,.31) 34%,rgba(10,12,12,.08) 68%,rgba(10,12,12,.27) 100%),
-    linear-gradient(180deg,rgba(15,12,10,.04),rgba(7,10,10,.34)),
+    linear-gradient(90deg, rgba(10, 12, 12, 0.54) 0%, rgba(10, 12, 12, 0.26) 34%, rgba(10, 12, 12, 0.06) 68%, rgba(10, 12, 12, 0.22) 100%),
+    linear-gradient(180deg, rgba(15, 12, 10, 0.02), rgba(7, 10, 10, 0.28)),
     url("assets/gamekelder-bg.webp");
-  background-size:cover;
-  background-position:center 52%;
-  background-repeat:no-repeat;
+  background-size: cover;
+  background-position: center 52%;
+  background-repeat: no-repeat;
+  transform: scale(1.025);
+  animation: environment-drift 32s ease-in-out infinite alternate;
 }
 
-.environment-vignette{z-index:1 !important}
-.grain{z-index:2 !important}
-.shell{position:relative;z-index:3}
+.environment-vignette { z-index: 1 !important; }
+.grain { z-index: 2 !important; }
+.shell { position: relative; z-index: 3; }
 
-@media (max-width:680px){
-  .environment{
-    background-position:44% center;
+@keyframes environment-drift {
+  from { transform: scale(1.025) translate3d(0, 0, 0); }
+  to { transform: scale(1.05) translate3d(-0.2%, 0.18%, 0); }
+}
+
+@media (max-width: 760px) {
+  .environment {
     background-image:
-      linear-gradient(180deg,rgba(8,10,10,.17),rgba(8,10,10,.35)),
-      url("assets/gamekelder-bg.webp");
+      linear-gradient(180deg, rgba(8, 10, 10, 0.08), rgba(8, 10, 10, 0.25)),
+      url("assets/gamekelder-bg-mobile.webp");
+    background-position: center center;
+    transform: none;
+    animation: none;
   }
+  .environment-vignette {
+    background:
+      radial-gradient(90% 55% at 50% 30%, rgba(241, 180, 121, 0.08), transparent 72%),
+      linear-gradient(180deg, rgba(5, 7, 7, 0.02), rgba(5, 7, 7, 0.23));
+  }
+  .grain { opacity: 0.075; }
 }
