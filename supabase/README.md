@@ -33,6 +33,7 @@ The production database records these migrations in `supabase_migrations.schema_
 | `20260824214918` | `friend_exchange_performance_indexes` |
 | `20260824214933` | `friend_exchange_guest_rate_limits` |
 | `20260824215242` | `friend_exchange_guest_cleanup` |
+| `20260824220348` | `friend_exchange_guest_limit_deny_policy` |
 
 The initial production schema was provisioned through the official Supabase management integration. Before cloning this backend into a second project, use `supabase db pull` against the project reference to materialize the complete baseline migration locally; do not hand-copy production data or service-role credentials.
 
@@ -55,6 +56,7 @@ All future DDL changes must be added as timestamped files under `supabase/migrat
 ## Security properties
 
 - Every browser-readable application table has Row Level Security.
+- Server-only rate-limit storage has an explicit deny-all client policy.
 - Private submissions are readable only by their owner before settlement.
 - Room membership gates rooms, rounds, assets and results.
 - Only a host/co-host can advance or settle a round.
@@ -62,6 +64,7 @@ All future DDL changes must be added as timestamped files under `supabase/migrat
 - Settlement is single-use and records immutable price events.
 - Public snapshots redact hidden answers until results are available.
 - Temporary test/guest identities can remove their own Friend Exchange account through a guarded RPC.
+- The final Supabase security and performance advisor scans return no lints.
 
 ## Verification
 
