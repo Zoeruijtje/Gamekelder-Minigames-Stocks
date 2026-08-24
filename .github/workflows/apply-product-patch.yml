@@ -35,11 +35,13 @@ jobs:
 
       - name: Reconstruct and apply the bounded patch
         run: |
-          base64 --decode .patch/gamekelder_patch.tar.gz.b64 > /tmp/gamekelder-patch.tar.gz
+          cat .patch/parts/patch.* > /tmp/gamekelder-patch.tar.gz.b64
+          test "$(wc -c < /tmp/gamekelder-patch.tar.gz.b64)" -eq 50204
+          echo "31dea0ded98f12015e100e13ca84e653ca37fda8c601b8c6e2f1dd93354dd3d3  /tmp/gamekelder-patch.tar.gz.b64" | sha256sum --check --strict
+          base64 --decode /tmp/gamekelder-patch.tar.gz.b64 > /tmp/gamekelder-patch.tar.gz
           echo "3b74a957b6771866bf08ad8e72a49526ef7e973a3330e2f3eb31af7fe9c53cc3  /tmp/gamekelder-patch.tar.gz" | sha256sum --check --strict
           tar --extract --gzip --file /tmp/gamekelder-patch.tar.gz --directory .
-          rm -f .patch/gamekelder_patch.tar.gz.b64
-          rmdir .patch 2>/dev/null || true
+          rm -rf .patch
 
       - name: Install browser test runtime
         run: |
