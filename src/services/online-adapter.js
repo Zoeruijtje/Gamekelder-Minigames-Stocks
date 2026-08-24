@@ -149,6 +149,15 @@ export class OnlineGameAdapter {
     return data;
   }
 
+  async expireTradingWindow(roundId) {
+    await this.connect();
+    const { data, error } = await this.db.rpc('expire_trading_window', {
+      p_round_id: roundId,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   async submitRound(roundId, payload, clientNonce = `submit_${Date.now()}_${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`) {
     await this.connect();
     const { data, error } = await this.db.rpc('submit_round_input', {

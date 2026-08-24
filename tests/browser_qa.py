@@ -55,7 +55,7 @@ def inline_app() -> str:
     html = re.sub(r'<link[^>]+rel="(?:preload|manifest)"[^>]*>', "", html)
     html = html.replace('<script src="supabase-config.js"></script>', '')
     css = "\n".join((ROOT / name).read_text(encoding="utf-8") for name in (
-        "styles.css", "styles-pages.css", "styles-interaction.css", "responsive.css", "online.css"
+        "styles.css", "styles-pages.css", "styles-interaction.css", "responsive.css", "online.css", "trading-window.css"
     ))
 
     replacements = {
@@ -69,11 +69,15 @@ def inline_app() -> str:
         css = css.replace(name, value)
 
     html = re.sub(r'<link[^>]+href="styles\.css"[^>]*>', f"<style>{css}</style>", html)
-    html = re.sub(r'<link[^>]+href="(?:styles-pages|styles-interaction|responsive|background-hq|online)\.css"[^>]*>', "", html)
+    html = re.sub(r'<link[^>]+href="(?:styles-pages|styles-interaction|responsive|background-hq|online|trading-window)\.css"[^>]*>', "", html)
     imports = json.dumps({"imports": module_map()})
     html = html.replace(
         '<script type="module" src="src/main.js"></script>',
         f'<script type="importmap">{imports}</script><script type="module">import "app:/src/main.js";</script>',
+    )
+    html = html.replace(
+        '<script type="module" src="src/services/trading-deadline.js"></script>',
+        '<script type="module">import "app:/src/services/trading-deadline.js";</script>',
     )
     return html
 
@@ -132,15 +136,21 @@ def complete_reaction_round(browser, html: str, screenshots: bool) -> None:
     page.get_by_role("button", name="RING THE OPENING BELL").click()
     page.wait_for_selector(".portfolio-hero")
 
-    page.get_by_role("button", name=re.compile("OPEN .* TRADING WINDOW")).click()
-    page.wait_for_selector(".market-state")
+    page.get_by_role("button", name=re.compile("START PRE-ROUND TRADING")).click()
+    page.wait_for_selector(".market-state--trading")
+    assert page.get_by_text("PRE-ROUND TRADING · AUTO-LOCKS IN").is_visible(), "Trading phase is not explained"
+    countdown_text = page.locator("[data-trading-countdown]").first.text_content()
+    assert countdown_text and countdown_text.startswith("00:"), f"Trading countdown is not visible: {countdown_text}"
+    assert page.locator("[data-trading-progress]").count() >= 1, "Trading progress indicator is missing"
+
     page.locator('.asset-row[data-market="friend"]').nth(1).click()
     page.wait_for_selector(".order-modal")
+    assert page.get_by_text("ORDERS AUTO-LOCK IN").is_visible(), "Order sheet deadline is missing"
     page.locator('form[data-form="order"] input[name="notional"]').fill("750")
     page.get_by_role("button", name="PLACE FICTIONAL ORDER").click()
     page.wait_for_selector(".order-modal", state="detached")
 
-    page.get_by_role("button", name="LOCK TRADING NOW").click()
+    page.get_by_role("button", name=re.compile("END TRADING EARLY")).click()
     page.get_by_role("button", name="START MINIGAME").click()
     page.wait_for_selector(".game-modal")
     page.get_by_role("button", name=re.compile("START FOR")).click()
@@ -173,7 +183,7 @@ def complete_reaction_round(browser, html: str, screenshots: bool) -> None:
     if screenshots:
         page.screenshot(path=str(ARTIFACTS / "reaction-market-settlement.png"), full_page=False)
     page.close()
-    print("PASS complete UI flow: trade → minigame → visible Friend Market repricing")
+    print("PASS complete UI flow: visible trade countdown → trade → minigame → Friend Market repricing")
 
 
 def main() -> int:

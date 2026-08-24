@@ -8,6 +8,8 @@ function first(value) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 async function request(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
@@ -143,6 +145,7 @@ try {
     p_trading_seconds: 10,
   }));
   assert.equal(round.status, 'trading');
+  assert.ok(new Date(round.locks_at).getTime() > Date.now());
 
   const tradingSnapshot = await rpc(hostToken, 'room_snapshot', { p_room_id: room.id });
   assert.equal(tradingSnapshot.members.length, 2);
@@ -164,12 +167,31 @@ try {
   assert.ok(Number(order.trade.quantity) > 0);
   console.log(`PASS transactional fictional order in ${targetAsset.symbol}`);
 
-  round = first(await rpc(hostToken, 'transition_online_round', {
-    p_round_id: round.id,
-    p_expected_version: round.version,
-    p_next_status: 'locked',
-    p_duration_seconds: null,
-  }));
+  const waitMs = Math.max(0, new Date(round.locks_at).getTime() - Date.now() + 350);
+  await sleep(waitMs);
+
+  let lateOrderRejected = false;
+  try {
+    await rpc(hostToken, 'execute_paper_order', {
+      p_portfolio_id: hostPortfolio.id,
+      p_symbol: targetAsset.symbol,
+      p_side: 'buy',
+      p_notional: 100,
+      p_quantity: null,
+      p_idempotency_key: `ci-late-${crypto.randomUUID()}`,
+    });
+  } catch (error) {
+    lateOrderRejected = /trading deadline has passed/i.test(String(error));
+  }
+  assert.equal(lateOrderRejected, true, 'Database must reject a Friend Market order after locks_at');
+  console.log('PASS database rejects an order after the authoritative trading deadline');
+
+  round = first(await rpc(playerToken, 'expire_trading_window', { p_round_id: round.id }));
+  assert.equal(round.status, 'locked', 'Any room member should be able to finalize an expired market window');
+  const duplicateExpiry = first(await rpc(hostToken, 'expire_trading_window', { p_round_id: round.id }));
+  assert.equal(duplicateExpiry.status, 'locked', 'Expiry should be idempotent');
+  console.log('PASS expired trading phase auto-finalizes without relying on the host timer');
+
   round = first(await rpc(hostToken, 'transition_online_round', {
     p_round_id: round.id,
     p_expected_version: round.version,

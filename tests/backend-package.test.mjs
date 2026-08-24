@@ -17,6 +17,8 @@ const expectedMigrations = [
   '20260824214933_friend_exchange_guest_rate_limits.sql',
   '20260824215242_friend_exchange_guest_cleanup.sql',
   '20260824220348_friend_exchange_guest_limit_deny_policy.sql',
+  '20260825112305_friend_exchange_routine_privilege_hardening.sql',
+  '20260825120000_friend_exchange_trading_deadline.sql',
 ];
 
 test('the complete deployed Supabase migration ledger is versioned', () => {
@@ -27,11 +29,12 @@ test('the complete deployed Supabase migration ledger is versioned', () => {
 
 test('browser configuration contains only a publishable Supabase key', () => {
   const config = read('supabase-config.js');
-  assert.match(config, /knndezzbjzcykysasfnw\.supabase\.co/);
-  assert.match(config, /sb_publishable_/);
-  assert.doesNotMatch(config, /sb_secret_/);
-  assert.doesNotMatch(config, /service[_-]?role/i);
-  assert.doesNotMatch(config, /database password/i);
+  const executableConfig = config.replace(/^\s*\/\/.*$/gm, '');
+  assert.match(executableConfig, /knndezzbjzcykysasfnw\.supabase\.co/);
+  assert.match(executableConfig, /sb_publishable_/);
+  assert.doesNotMatch(executableConfig, /sb_secret_/);
+  assert.doesNotMatch(executableConfig, /service[_-]?role/i);
+  assert.doesNotMatch(executableConfig, /database password/i);
 });
 
 test('guest identities are rate limited and authoritative settlement is server-side', () => {
@@ -46,4 +49,13 @@ test('guest identities are rate limited and authoritative settlement is server-s
   assert.match(authoritativeSql, /previous_price = asset\.price/);
   assert.match(authoritativeSql, /old_price, new_price/);
   assert.match(authoritativeSql, /Market move exceeds circuit breaker/);
+});
+
+test('the Friend Market trading deadline is enforced by Postgres, not only by the browser', () => {
+  const deadlineSql = read('supabase/migrations/20260825120000_friend_exchange_trading_deadline.sql');
+  assert.match(deadlineSql, /locks_at\s+is\s+null\s+or\s+trading_round\.locks_at\s*<=\s*now\(\)/i);
+  assert.match(deadlineSql, /Friend Market trading deadline has passed/);
+  assert.match(deadlineSql, /create or replace function friend_exchange\.expire_trading_window/i);
+  assert.match(deadlineSql, /if now\(\) < round_row\.locks_at then/i);
+  assert.match(deadlineSql, /set status = 'locked'/i);
 });

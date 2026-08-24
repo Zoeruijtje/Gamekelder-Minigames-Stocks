@@ -1,0 +1,62 @@
+/* Pre-round Friend Market trading phase
+   Deliberately restrained: warm glass, one progress accent, no neon effects. */
+.market-state--trading{
+  min-width:min(410px,42vw);
+  padding:12px 14px;
+  border-color:rgba(232,202,162,.32);
+  background:linear-gradient(145deg,rgba(71,57,43,.34),rgba(18,18,17,.56));
+  box-shadow:inset 0 1px rgba(255,255,255,.08),0 18px 45px rgba(0,0,0,.18);
+}
+.market-state--trading .live-dot{align-self:flex-start;margin-top:4px}
+.market-state__body{display:grid!important;grid-template-columns:auto 1fr;gap:2px 13px;width:100%}
+.market-state__body small{grid-column:1/-1;color:var(--warm);font-size:7px;letter-spacing:.13em}
+.market-state__body>b{grid-row:2/4;font-size:38px!important;line-height:.9;min-width:82px;font-variant-numeric:tabular-nums}
+.market-state__body>em{align-self:center;color:var(--muted);font-size:7.5px;font-style:normal;line-height:1.45}
+.trading-progress{grid-column:2;position:relative;height:3px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.08)}
+.trading-progress>i{position:absolute;inset:0 auto 0 0;border-radius:inherit;background:linear-gradient(90deg,rgba(232,202,162,.42),rgba(241,218,185,.95));transition:width .22s linear}
+.market-state--trading.is-expired{border-color:rgba(209,111,98,.32);background:linear-gradient(145deg,rgba(79,38,34,.27),rgba(18,18,17,.58))}
+.market-state--trading.is-expired .live-dot{background:var(--negative);box-shadow:none}
+.market-state--trading.is-expired .trading-progress>i{background:var(--negative)}
+
+.round-trading-rule{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:20px 0 2px;padding-top:15px;border-top:1px solid rgba(255,255,255,.08)}
+.round-trading-rule>*{padding:8px 9px;border:1px solid rgba(255,255,255,.07);border-radius:9px;background:rgba(255,255,255,.025);color:var(--muted);font-size:7px;line-height:1.35}
+.round-trading-rule>b{color:var(--warm);font-weight:600;border-color:rgba(232,202,162,.18);background:rgba(232,202,162,.07)}
+.round-actions .button span{display:block;margin-top:3px;color:rgba(255,255,255,.56);font-size:6px;font-weight:500;letter-spacing:.04em}
+
+.field--explained{grid-row:span 2;padding:11px;border:1px solid rgba(232,202,162,.12);border-radius:11px;background:rgba(232,202,162,.035)}
+.field-help{color:var(--muted);font-size:7px;line-height:1.5}
+
+.controller-shell>.market-state{width:100%;margin:0}
+.controller-shell>.market-state--trading{min-width:0}
+.controller-trading-note{display:grid;gap:4px;margin:16px 0 2px;padding:12px;border:1px solid rgba(232,202,162,.18);border-radius:12px;background:rgba(232,202,162,.055)}
+.controller-trading-note b{color:var(--warm);font-size:9px;letter-spacing:.08em}
+.controller-trading-note span{color:var(--muted);font-size:8px;line-height:1.5}
+.controller-market-lock{display:block;margin-top:11px;color:var(--faint);font-size:7px;line-height:1.5}
+.controller-market-lock.is-open{color:var(--warm)}
+
+.order-deadline{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;margin:18px 0 4px;padding:12px 14px;border:1px solid rgba(232,202,162,.24);border-radius:12px;background:rgba(232,202,162,.065)}
+.order-deadline>span{display:grid;gap:1px;min-width:90px}
+.order-deadline small{color:var(--warm);font-size:6.5px;letter-spacing:.12em}
+.order-deadline b{font-family:var(--display);font-size:31px;font-weight:400;font-variant-numeric:tabular-nums;line-height:1}
+.order-deadline em{color:var(--muted);font-size:7.5px;font-style:normal;line-height:1.45}
+.order-deadline.is-closed{border-color:rgba(209,111,98,.26);background:rgba(148,62,53,.08)}
+.order-deadline.is-closed small,.order-deadline.is-closed b{color:var(--negative)}
+
+@media(max-width:900px){
+  .market-state--trading{min-width:min(100%,380px)}
+}
+
+@media(max-width:620px){
+  .market-state--trading{width:100%;min-width:0;padding:12px}
+  .market-state__body{grid-template-columns:76px minmax(0,1fr)}
+  .market-state__body>b{font-size:34px!important}
+  .round-trading-rule{grid-template-columns:1fr}
+  .field--explained{grid-row:auto}
+  .order-deadline{grid-template-columns:1fr;gap:7px}
+  .order-deadline>span{grid-template-columns:1fr auto;align-items:end}
+  .order-deadline b{font-size:28px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .trading-progress>i{transition:none}
+}
