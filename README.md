@@ -1,34 +1,47 @@
 # Friend Exchange — Gamekelder
 
-A complete local game-night MVP that combines:
+Friend Exchange is a game-night application that combines fictional paper trading, friend-owned stocks and eight multiplayer minigames in a warm luxury gamekelder interface.
 
-- fake-money paper trading for real-world ticker symbols;
-- a fictional Friend Market where every player is a listed company;
-- eight playable minigames;
-- expectation-based Friend Market repricing;
-- separate investor, company and minigame rankings;
-- a warm luxury gamekelder background with transparent glass UI;
-- responsive host and phone-controller layouts;
-- a checked-in Supabase backend foundation for future cross-device rooms.
+It contains no real-money trading, brokerage connection, deposit, withdrawal or monetary prize.
 
-There is no real-money trading, brokerage connection, deposit, withdrawal or promise of financial profit.
+## Product modes
 
-## What works now
+### Free online rooms
 
-### Complete local session
+The browser is connected to the user-created Supabase project `knndezzbjzcykysasfnw` using only its public URL and publishable key. The implementation uses Free Plan-compatible database, Auth, Realtime and Edge Function features and does not require a paid add-on.
 
-A local room can be configured and played from lobby through market close:
+Online rooms support:
 
-1. Edit players, tickers and bot/human control.
-2. Select 3–12 rounds, trading-window duration, starting cash and volatility.
-3. Choose the minigame rotation.
-4. Open a Friend Market trading window.
-5. Place fictional buy/sell orders.
-6. Lock trading and play the game.
-7. Settle scores, ratings, stock returns, XP and market news.
-8. Continue until final session awards.
+1. Temporary guest sign-in.
+2. Room creation and six-character invitation codes.
+3. Cross-device joining, ready states and connection status.
+4. Host-controlled session and round phases.
+5. Private player submissions.
+6. Transactional fictional Friend Market orders.
+7. Server-authoritative scoring and settlement.
+8. Reconnect snapshots and host failover.
 
-### Eight games
+The `friend_exchange` database schema is isolated from unrelated application schemas. Row Level Security and private Realtime-channel authorization protect rooms, submissions, portfolios and results.
+
+### Complete local mode
+
+Local mode remains fully playable without Supabase or an internet connection. It supports editable human/bot rooms, same-origin tab synchronization, persistent browser storage and a complete multi-round session.
+
+## Visible Friend Market settlement
+
+Each minigame visibly reprices every listed friend. The settlement presentation shows:
+
+- the price before settlement;
+- the new settled price;
+- exact percentage and absolute movement;
+- whether performance beat or missed expectation;
+- animated directional movement bars;
+- the selected investor's direct round profit or loss;
+- persistent last-round movement on overview and market cards.
+
+Friend Market prices are driven primarily by actual performance relative to each player's category rating. Returns are bounded by the selected volatility mode.
+
+## Eight playable games
 
 - Reaction Test
 - Stop the Clock
@@ -36,35 +49,28 @@ A local room can be configured and played from lobby through market close:
 - Closest Wins
 - Higher / Lower
 - Minority Rules
-- Prisoner’s Dilemma
+- Prisoner's Dilemma
 - Prediction Desk
 
-### Markets
+## Markets and portfolios
 
-- **Friend Market:** tradable only during the pre-round trading phase.
-- **Real paper market:** simulated price feed, clearly marked `DEMO`, with fractional fake-money orders.
-- Separate cash, positions, average cost, realised P/L and unrealised P/L.
-- Immutable local fill ledger with idempotency protection.
+- **Friend Market:** online or local fictional stocks whose prices move after minigames.
+- **Real-symbol paper market:** a clearly labelled local `DEMO` feed in the free build.
+- Separate fictional balances for both markets.
+- Fractional buy and sell orders.
+- Weighted average cost.
+- Realised and unrealised fictional profit/loss.
+- Idempotent order handling and immutable trade records.
 
-### Persistence and controllers
+No paid real-time market-data provider is required for the core game.
 
-- State persists in `localStorage` where browser policy permits it.
-- `BroadcastChannel` synchronizes additional tabs on the same browser origin.
-- The header controller button opens a dedicated phone-style controller view.
-- The application remains usable when browser storage is disabled.
+## Responsive interface
 
-## High-quality background
-
-Normal page loads reconstruct the approved **1536 × 864 px** WebP from cacheable checked-in chunks and apply the correct desktop or phone focal crop in CSS. The source was encoded from the approved room image without resizing and is validated by unit and CI tests before release.
-
-Bundled emergency fallbacks remain available when reconstruction is blocked or interrupted:
-
-```text
-assets/gamekelder-bg.webp         1536 × 864
-assets/gamekelder-bg-mobile.webp   480 × 854
-```
-
-The compact portrait file is only a failure fallback. The standard GitHub Pages path uses the reconstructed high-quality source on phones as well, with background movement disabled and an intentional mobile focal point.
+- Premium desktop host dashboard.
+- Focused phone controller layout.
+- Visible settlement prices at every supported width.
+- Deliberate phone focal crop rather than a compressed desktop screen.
+- Reduced-motion support.
 
 ## Run locally
 
@@ -84,73 +90,41 @@ npm test
 
 The test suite includes:
 
-- JavaScript syntax validation;
-- portfolio/order invariant tests;
-- deterministic expectation-based price-settlement tests;
+- JavaScript syntax checks;
 - all eight minigame scoring modules;
-- complete multi-round local session settlement;
-- responsive browser checks at phone, tablet and desktop sizes;
-- an actual UI flow from lobby → trade → lock → Reaction Test → settlement;
-- background reconstruction, dimensions and fallback validation in GitHub Actions.
+- portfolio and order invariants;
+- deterministic expectation-based settlement;
+- explicit before/after market-price tests;
+- online-snapshot normalization tests;
+- responsive checks at phone, tablet and desktop sizes;
+- a full browser flow from trade through Reaction Test to visible market repricing;
+- high-quality background reconstruction checks.
+
+## Public runtime configuration
+
+`supabase-config.js` contains only the public Supabase URL and publishable browser key. Secret/service-role credentials and provider API keys must never be committed or sent to the browser.
 
 ## Repository structure
 
 ```text
 index.html
 styles.css
+styles-pages.css
+styles-interaction.css
 responsive.css
+online.css
 background-hq.css
 supabase-config.js
 src/
-  config.js
-  store.js
-  main.js
   engine/
   services/
   ui/
 assets/
-  background/
 tests/
-supabase/
-  migrations/
-  functions/
 docs/
 .github/workflows/
 ```
 
-## Supabase status
+## Deployment
 
-The website currently defaults to fully functional local mode. A production backend is checked in but has **not** been applied to an existing Supabase project.
-
-The only currently connected Supabase project contains unrelated inspection-app tables, so this project must use a new dedicated Supabase project rather than modifying that database.
-
-Checked-in backend work includes:
-
-- profiles, rooms, members and sessions;
-- rounds, private submissions and results;
-- Friend Market assets and immutable price events;
-- real/friend portfolios, positions, orders and trades;
-- market-quote cache;
-- achievements, news and audit events;
-- Row Level Security policies;
-- private Realtime room authorization;
-- anonymous-room RPC functions;
-- transactional fake-money order execution;
-- authoritative round-settlement RPC;
-- market-data Edge Function;
-- round-settlement Edge Function;
-- browser-side Supabase adapter.
-
-See [`docs/SUPABASE_DEPLOYMENT.md`](docs/SUPABASE_DEPLOYMENT.md).
-
-## Continuation handoff
-
-- [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)
-- [`docs/CONTINUATION_PROTOCOL.md`](docs/CONTINUATION_PROTOCOL.md)
-- [`docs/NEXT_SESSION_PROMPT.md`](docs/NEXT_SESSION_PROMPT.md)
-
-These documents preserve the next bounded backend task and its verification requirements.
-
-## GitHub Pages
-
-The `pages.yml` workflow deploys `main` as a static GitHub Pages site. No production build server is needed.
+`main` is deployed as a static GitHub Pages application by `.github/workflows/pages.yml`. The product does not require a paid frontend host or production build server.
