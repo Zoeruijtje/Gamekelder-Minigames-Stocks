@@ -55,14 +55,16 @@ A local room can be configured and played from lobby through market close:
 
 ## High-quality background
 
-The deployed assets preserve the source dimensions and use high-quality WebP compression:
+Normal page loads reconstruct the approved **1536 × 864 px** WebP from cacheable checked-in chunks and apply the correct desktop or phone focal crop in CSS. The source was encoded from the approved room image without resizing and is validated by unit and CI tests before release.
+
+Bundled emergency fallbacks remain available when reconstruction is blocked or interrupted:
 
 ```text
 assets/gamekelder-bg.webp         1536 × 864
-assets/gamekelder-bg-mobile.webp  1080 × 1920
+assets/gamekelder-bg-mobile.webp   480 × 854
 ```
 
-The desktop file is encoded from the approved source without resizing (PSNR ≈ 46 dB versus the supplied PNG). The portrait asset is an art-directed crop for phones rather than a stretched low-resolution derivative.
+The compact portrait file is only a failure fallback. The standard GitHub Pages path uses the reconstructed high-quality source on phones as well, with background movement disabled and an intentional mobile focal point.
 
 ## Run locally
 
@@ -89,7 +91,7 @@ The test suite includes:
 - complete multi-round local session settlement;
 - responsive browser checks at phone, tablet and desktop sizes;
 - an actual UI flow from lobby → trade → lock → Reaction Test → settlement;
-- background dimension and quality gates in GitHub Actions.
+- background reconstruction, dimensions and fallback validation in GitHub Actions.
 
 ## Repository structure
 
@@ -97,6 +99,7 @@ The test suite includes:
 index.html
 styles.css
 responsive.css
+background-hq.css
 supabase-config.js
 src/
   config.js
@@ -106,6 +109,7 @@ src/
   services/
   ui/
 assets/
+  background/
 tests/
 supabase/
   migrations/
@@ -138,6 +142,14 @@ Checked-in backend work includes:
 - browser-side Supabase adapter.
 
 See [`docs/SUPABASE_DEPLOYMENT.md`](docs/SUPABASE_DEPLOYMENT.md).
+
+## Continuation handoff
+
+- [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)
+- [`docs/CONTINUATION_PROTOCOL.md`](docs/CONTINUATION_PROTOCOL.md)
+- [`docs/NEXT_SESSION_PROMPT.md`](docs/NEXT_SESSION_PROMPT.md)
+
+These documents preserve the next bounded backend task and its verification requirements.
 
 ## GitHub Pages
 
