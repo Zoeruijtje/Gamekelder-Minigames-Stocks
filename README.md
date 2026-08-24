@@ -1,51 +1,104 @@
 # Friend Exchange — Gamekelder
 
-A static GitHub Pages party-game prototype combining **paper trading**, **friend stocks**, and **multiplayer-style minigames** in a warm luxury glass interface.
+A static GitHub Pages prototype that combines:
 
-## Current build
+- fake-money paper trading for real-world ticker symbols;
+- a fictional Friend Market;
+- multiplayer-style minigames that reprice friend stocks;
+- a warm luxury gamekelder background with responsive transparent-glass UI.
 
-- Uses the generated luxury **gamekelder** artwork as a local repository asset.
-- Responsive, framework-free HTML/CSS/JavaScript.
-- Warm smoked/frosted glass surfaces, restrained colour, Bebas Neue-style display typography.
-- Local `localStorage` persistence for the paper portfolio and session state.
-- Real-world ticker **demo feed** for NVDA, AAPL, MSFT and TSLA using fake money only.
-- Friend Market with ZOE, MKE, LRS and ALX.
-- Buy/sell paper-trading flow with cash and position updates.
-- Five playable local minigames:
-  - Reaction Test
-  - Stop the Clock
-  - Memory Grid
-  - Closest Wins
-  - Higher / Lower
-- Minigame performance reprices the Friend Market and updates XP, rankings, news and activity.
-- Leaderboards, market ticker and session news.
+No real money is used. The current real-market values are a clearly labelled demo feed.
 
-## Important: real stock prices
+## Current status
 
-The current build deliberately labels real-world ticker prices as a **demo feed**. GitHub Pages is static hosting and cannot safely hide a private market-data API key.
+The working implementation lives on `feat/full-gamekelder-site` and is reviewed through PR #1 before merging into `main`.
 
-The intended production architecture is:
+Implemented:
 
-1. **GitHub Pages** — static frontend.
-2. **Supabase Auth** — player accounts / identities.
-3. **Supabase Realtime** — rooms, player presence, live round state, secret votes and multiplayer results.
-4. **Supabase Edge Function** — server-side proxy to an external market-data provider so the provider API key is never exposed in the browser.
-5. **Supabase Postgres + Row Level Security** — portfolios, seasons, trades, achievements and room membership.
+- Overview, Market, Portfolio, Minigames, Leaderboard and News views;
+- buy/sell paper orders and local portfolio persistence;
+- five playable local minigames;
+- Friend Market movement after game results;
+- desktop, tablet and phone layouts;
+- dedicated desktop and portrait gamekelder background assets;
+- automated browser regression tests for background visibility and horizontal overflow.
 
-Only a Supabase publishable key should ever be exposed to the browser, with RLS protecting browser-accessible tables. Secret/service-role credentials must remain server-side.
+## Files
+
+```text
+index.html                         Application markup
+styles.css                        Base visual system and component styles
+background.css                    Desktop/mobile environment artwork layers
+responsive.css                    Responsive invariants and breakpoints
+app.js                            Local state, paper trading and minigames
+assets/gamekelder-bg.webp         Desktop background
+assets/gamekelder-bg-mobile.webp  Portrait phone background
+requirements-test.txt             Browser-test dependency
+
+tests/test_responsive.py          Automated responsive browser regression suite
+
+docs/ARCHITECTURE.md              Current technical architecture
+docs/PRODUCT_PLAN.md              Product phases and implementation order
+docs/RESPONSIVE_QA.md             Mobile bug analysis, invariants and test report
+docs/SUPABASE_PLAN.md             Future secure multiplayer/backend design
+```
 
 ## Run locally
 
-Because the site is static, any local HTTP server works. For example:
+No build step is required.
 
 ```bash
-python -m http.server 8080
+python -m http.server 8000
 ```
 
-Then open `http://localhost:8080`.
+Open `http://localhost:8000`.
+
+## Run verification
+
+```bash
+python -m pip install -r requirements-test.txt
+python -m playwright install chromium
+python tests/test_responsive.py --screenshots
+```
+
+The suite renders the site at seven viewport sizes and fails when:
+
+- the document becomes wider than the viewport;
+- the background does not fill the visual viewport;
+- the gamekelder WebP is missing;
+- the phone layout does not collapse to one column;
+- the mobile holdings table widens the page instead of scrolling inside its card;
+- the phone heading is clipped or wraps unexpectedly.
+
+Results are written to `test-artifacts/responsive-results.json`. Screenshot artifacts are intentionally ignored by Git unless explicitly selected for a release review. The same suite runs automatically in GitHub Actions.
 
 ## GitHub Pages
 
-After the feature branch is merged, configure **Settings → Pages → Deploy from a branch → `main` / root**.
+After review and merge, configure GitHub Pages to deploy from:
 
-No build step is required.
+```text
+Branch: main
+Folder: /
+```
+
+`.nojekyll` is included.
+
+## Market-data constraint
+
+GitHub Pages is public static hosting. A private market-data API key must never be committed or embedded in browser JavaScript. The planned production path is:
+
+```text
+GitHub Pages frontend
+        ↓
+Supabase Auth + RLS
+        ↓
+Supabase Edge Function
+        ↓
+Market-data provider
+```
+
+The browser will receive only the public Supabase publishable key. Provider keys and Supabase secret keys stay in Edge Function secrets.
+
+## Supabase
+
+Supabase is not required for this version and no project is created by the frontend branch. The intended later use is documented in [`docs/SUPABASE_PLAN.md`](docs/SUPABASE_PLAN.md).
