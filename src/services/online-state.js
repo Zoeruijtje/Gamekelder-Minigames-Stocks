@@ -18,6 +18,7 @@ export function onlineDefaults() {
     gameQueue: [],
     presenceCount: 0,
     leaderboard: [],
+    serverOffsetMs: 0,
   };
 }
 
@@ -226,6 +227,8 @@ export function applyOnlineSnapshot(inputState, snapshot, userId) {
   const phase = currentRound?.phase ?? (snapshot.room.status === 'complete' ? PHASES.COMPLETE : PHASES.LOBBY);
   const settings = { ...state.settings, ...(session?.settings ?? snapshot.room.settings ?? {}) };
   const market = mapFriendMarket(snapshot, players, previousSessionId === session?.id ? state.markets.friend : null);
+  const serverTimeMs = new Date(snapshot.server_time ?? Date.now()).getTime();
+  const serverOffsetMs = Number.isFinite(serverTimeMs) ? serverTimeMs - Date.now() : 0;
 
   state.mode = 'online';
   state.route = snapshot.room.status === 'lobby' ? 'lobby' : 'session';
@@ -267,6 +270,7 @@ export function applyOnlineSnapshot(inputState, snapshot, userId) {
     error: null,
     gameQueue: session?.settings?.gameQueue ?? state.online.gameQueue ?? [],
     leaderboard: snapshot.leaderboard ?? [],
+    serverOffsetMs,
   };
   return state;
 }
