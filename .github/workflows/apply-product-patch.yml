@@ -1,11 +1,8 @@
 name: Apply staged Friend Exchange product patch
 
 on:
-  push:
-    branches: [feat/free-supabase-market-refinement]
-    paths:
-      - .patch/gamekelder_patch.tar.gz.b64
-      - .github/workflows/apply-product-patch.yml
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,6 +14,7 @@ concurrency:
 
 jobs:
   apply-and-verify:
+    if: github.head_ref == 'feat/free-supabase-market-refinement' || github.ref_name == 'feat/free-supabase-market-refinement'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -56,6 +54,8 @@ jobs:
           npm run test:browser
 
       - name: Commit the verified product patch
+        env:
+          BRANCH: feat/free-supabase-market-refinement
         run: |
           git config user.name "Friend Exchange QA Bot"
           git config user.email "actions@users.noreply.github.com"
@@ -63,7 +63,7 @@ jobs:
           git diff --cached --check
           git diff --cached --quiet && { echo "No patch changes found"; exit 1; }
           git commit -m "feat: add free online rooms and visible market settlement"
-          git push origin HEAD:feat/free-supabase-market-refinement
+          git push origin HEAD:"$BRANCH"
 
       - name: Upload browser artifacts on failure
         if: failure()
