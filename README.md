@@ -26,22 +26,25 @@ Implemented:
 ## Files
 
 ```text
-index.html                         Application markup
-styles.css                        Base visual system and component styles
-background.css                    Desktop/mobile environment artwork layers
-responsive.css                    Responsive invariants and breakpoints
-app.js                            Local state, paper trading and minigames
-assets/gamekelder-bg.webp         Desktop background
-assets/gamekelder-bg-mobile.webp  Portrait phone background
-requirements-test.txt             Browser-test dependency
+index.html                              Application markup
+styles.css                             Base visual system and component styles
+background.css                         Desktop/mobile environment artwork layers
+responsive.css                         Responsive invariants and breakpoints
+app.js                                 Local state, paper trading and minigames
+assets/gamekelder-bg.webp              Desktop background
+assets/gamekelder-bg-mobile.webp       Portrait phone background
+requirements-test.txt                  Browser-test dependency
 
-tests/test_responsive.py          Automated responsive browser regression suite
+tests/test_responsive.py               Automated responsive browser regression suite
 
-docs/ARCHITECTURE.md              Current technical architecture
-docs/PRODUCT_PLAN.md              Product phases and implementation order
-docs/RESPONSIVE_QA.md             Mobile bug analysis, invariants and test report
-docs/SUPABASE_PLAN.md             Future secure multiplayer/backend design
+docs/ARCHITECTURE.md                   Current technical architecture
+docs/PRODUCT_PLAN.md                   Product phases and implementation order
+docs/FULL_IMPLEMENTATION_PLAN.md       Detailed path from prototype to full product
+docs/RESPONSIVE_QA.md                  Mobile bug analysis, invariants and test report
+docs/SUPABASE_PLAN.md                  Future secure multiplayer/backend design
 ```
+
+The comprehensive product, market, minigame, data-model, security, testing and pull-request roadmap is in [`docs/FULL_IMPLEMENTATION_PLAN.md`](docs/FULL_IMPLEMENTATION_PLAN.md).
 
 ## Run locally
 
