@@ -1,0 +1,13 @@
+.environment{
+  background-image:
+    linear-gradient(90deg,rgba(10,12,12,.76) 0%,rgba(10,12,12,.40) 34%,rgba(10,12,12,.12) 68%,rgba(10,12,12,.35) 100%),
+    linear-gradient(180deg,rgba(15,12,10,.08),rgba(7,10,10,.46)),
+    url("assets/gamekelder-bg.webp");
+  background-size:cover;
+  background-position:center 52%;
+  background-repeat:no-repeat;
+}
+
+@media (max-width:680px){
+  .environment{background-position:44% center}
+}
