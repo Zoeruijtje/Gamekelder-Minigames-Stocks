@@ -37,9 +37,33 @@ jobs:
         run: |
           python - <<'PY'
           import base64
-          from io import BytesIO
           from pathlib import Path
-          from PIL import Image
+
+          def webp_dimensions(data: bytes) -> tuple[int, int]:
+              assert len(data) >= 30, f'WebP is too small: {len(data)} bytes'
+              assert data[:4] == b'RIFF', data[:4]
+              assert data[8:12] == b'WEBP', data[8:12]
+              chunk = data[12:16]
+
+              if chunk == b'VP8 ':
+                  assert data[23:26] == b'\x9d\x01\x2a', data[23:26]
+                  return (
+                      int.from_bytes(data[26:28], 'little') & 0x3FFF,
+                      int.from_bytes(data[28:30], 'little') & 0x3FFF,
+                  )
+
+              if chunk == b'VP8L':
+                  assert data[20] == 0x2F, data[20]
+                  bits = int.from_bytes(data[21:25], 'little')
+                  return ((bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1)
+
+              if chunk == b'VP8X':
+                  return (
+                      int.from_bytes(data[24:27], 'little') + 1,
+                      int.from_bytes(data[27:30], 'little') + 1,
+                  )
+
+              raise AssertionError(f'Unsupported WebP chunk: {chunk!r}')
 
           fallbacks = {
               'assets/gamekelder-bg.webp': (1536, 864, 10_000),
@@ -47,20 +71,19 @@ jobs:
           }
           for filename, (width, height, minimum) in fallbacks.items():
               path = Path(filename)
-              image = Image.open(path)
-              assert image.size == (width, height), (filename, image.size)
-              assert path.stat().st_size >= minimum, (filename, path.stat().st_size)
-              print('PASS fallback', filename, image.size, path.stat().st_size)
+              data = path.read_bytes()
+              assert len(data) >= minimum, (filename, len(data))
+              assert webp_dimensions(data) == (width, height), (filename, webp_dimensions(data))
+              print('PASS fallback', filename, (width, height), len(data))
 
           parts = [
               Path(f'assets/background/desktop.{index:02d}.b64').read_text().strip()
               for index in range(9)
           ]
           decoded = base64.b64decode(''.join(parts), validate=True)
-          image = Image.open(BytesIO(decoded))
-          assert image.size == (1536, 864), image.size
           assert len(decoded) >= 70_000, len(decoded)
-          print('PASS reconstructed high-quality background', image.size, len(decoded))
+          assert webp_dimensions(decoded) == (1536, 864), webp_dimensions(decoded)
+          print('PASS reconstructed high-quality background', (1536, 864), len(decoded))
           PY
       - name: Upload browser artifacts on failure
         if: failure()
