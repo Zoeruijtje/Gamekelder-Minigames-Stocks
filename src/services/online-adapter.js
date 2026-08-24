@@ -43,7 +43,7 @@ export class OnlineGameAdapter {
       return existing;
     }
 
-    const { data: credentials, error: guestError } = await this.client.functions.invoke('guest-auth', {
+    const { data: credentials, error: guestError } = await this.client.functions.invoke('guest-auth-v2', {
       body: { display_name: displayName },
     });
     if (guestError) throw guestError;
