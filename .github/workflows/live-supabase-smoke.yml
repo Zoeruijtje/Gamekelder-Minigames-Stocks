@@ -1,0 +1,30 @@
+name: Live Supabase Smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tests/live-supabase-smoke.mjs"
+      - ".github/workflows/live-supabase-smoke.yml"
+      - "supabase-config.js"
+      - "src/services/online-adapter.js"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-supabase-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-room-and-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Create two guests, trade, settle and verify synchronized market movement
+        run: node tests/live-supabase-smoke.mjs
