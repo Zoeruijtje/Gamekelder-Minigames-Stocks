@@ -65,9 +65,13 @@ jobs:
 
               raise AssertionError(f'Unsupported WebP chunk: {chunk!r}')
 
+          # The mobile file is a compact emergency fallback only. Normal page
+          # loads reconstruct the approved 1536 x 864 background and apply the
+          # phone focal crop in CSS, so the fallback is not stretched in the
+          # standard GitHub Pages path.
           fallbacks = {
               'assets/gamekelder-bg.webp': (1536, 864, 10_000),
-              'assets/gamekelder-bg-mobile.webp': (1080, 1920, 10_000),
+              'assets/gamekelder-bg-mobile.webp': (480, 854, 10_000),
           }
           for filename, (width, height, minimum) in fallbacks.items():
               path = Path(filename)
