@@ -1,0 +1,7 @@
+project_id = "knndezzbjzcykysasfnw"
+
+[functions.guest-auth-v2]
+verify_jwt = false
+
+[functions.settle-round]
+verify_jwt = true
