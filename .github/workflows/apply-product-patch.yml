@@ -41,6 +41,45 @@ jobs:
           base64 --decode /tmp/gamekelder-patch.tar.gz.b64 > /tmp/gamekelder-patch.tar.gz
           echo "3b74a957b6771866bf08ad8e72a49526ef7e973a3330e2f3eb31af7fe9c53cc3  /tmp/gamekelder-patch.tar.gz" | sha256sum --check --strict
           tar --extract --gzip --file /tmp/gamekelder-patch.tar.gz --directory .
+          cat >> online.css <<'CSS'
+
+          /* Market settlement prices remain visible on every controller size. */
+          @media(max-width:980px){
+            .market-result-row{
+              grid-template-columns:30px 34px minmax(0,1fr) 135px;
+              grid-template-areas:
+                "rank avatar player move"
+                ". . prices prices";
+              row-gap:7px;
+            }
+            .market-result-rank{grid-area:rank}
+            .market-result-avatar{grid-area:avatar}
+            .market-result-player{grid-area:player}
+            .market-result-prices{
+              grid-area:prices;
+              display:grid;
+              grid-template-columns:max-content auto max-content;
+              justify-content:end;
+              min-width:0;
+              padding-top:6px;
+              border-top:1px solid rgba(255,255,255,.055);
+            }
+            .market-result-move{grid-area:move}
+          }
+          @media(max-width:620px){
+            .market-result-row{
+              grid-template-columns:28px 32px minmax(0,1fr) 92px;
+              grid-template-areas:
+                "rank avatar player move"
+                ". prices prices prices";
+            }
+            .market-result-prices{
+              justify-content:start;
+              width:100%;
+            }
+            .market-result-prices b{font-size:18px}
+          }
+          CSS
           rm -rf .patch
 
       - name: Install browser test runtime
@@ -61,6 +100,7 @@ jobs:
         run: |
           git config user.name "Friend Exchange QA Bot"
           git config user.email "actions@users.noreply.github.com"
+          rm -f .github/workflows/apply-product-patch.yml
           git add -A
           git diff --cached --check
           git diff --cached --quiet && { echo "No patch changes found"; exit 1; }
