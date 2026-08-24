@@ -1,0 +1,14 @@
+{
+  "name": "friend-exchange-gamekelder",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Fake-money stock trading and party minigames for GitHub Pages.",
+  "scripts": {
+    "dev": "python -m http.server 8000",
+    "check": "find src -name '*.js' -print0 | xargs -0 -n1 node --check",
+    "test:unit": "node --test tests/*.test.mjs",
+    "test:browser": "python tests/browser_qa.py --screenshots",
+    "test": "npm run check && npm run test:unit && npm run test:browser"
+  }
+}
