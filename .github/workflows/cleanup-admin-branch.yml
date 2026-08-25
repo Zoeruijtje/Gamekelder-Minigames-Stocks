@@ -1,0 +1,31 @@
+name: Clean admin release branch
+
+on:
+  push:
+    branches: [feat/admin-control-center-navigation]
+    paths:
+      - ".github/workflows/cleanup-admin-branch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove bounded deployment helpers and placeholders
+        run: |
+          rm -f .github/workflows/deploy-admin-backend-preview.yml
+          rm -f .github/workflows/cleanup-admin-branch.yml
+          rm -f docs/.keep-admin-pr
+          rm -f docs/admin-bootstrap-placeholder.txt
+          rm -f docs/DEPLOYMENT_NOTE_ADMIN.md
+          git config user.name "Zoeruijtje"
+          git config user.email "120500701+Zoeruijtje@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: remove bounded admin deployment helpers"
+          git push origin HEAD:feat/admin-control-center-navigation
