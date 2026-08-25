@@ -1,0 +1,1 @@
+Admin backend deployment must apply the checked-in migration and deploy `admin-bootstrap` before the frontend branch is merged.
