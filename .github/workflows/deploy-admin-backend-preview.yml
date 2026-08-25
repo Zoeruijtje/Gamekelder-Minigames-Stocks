@@ -1,0 +1,40 @@
+name: Deploy admin backend preview
+
+on:
+  push:
+    branches: [feat/admin-control-center-navigation]
+    paths:
+      - ".github/workflows/deploy-admin-backend-preview.yml"
+      - "supabase/migrations/20260825133000_friend_exchange_admin_control_center.sql"
+      - "supabase/functions/admin-bootstrap/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: friend-exchange-admin-backend-preview
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: knndezzbjzcykysasfnw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Validate deployment credentials
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo 'SUPABASE_ACCESS_TOKEN is not configured'; exit 1; }
+          test -n "$SUPABASE_DB_PASSWORD" || { echo 'SUPABASE_DB_PASSWORD is not configured'; exit 1; }
+      - name: Link the existing Free Plan project
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - name: Apply versioned database migrations
+        run: supabase db push --linked
+      - name: Deploy the one-time admin bootstrap function
+        run: supabase functions deploy admin-bootstrap --project-ref "$PROJECT_REF" --no-verify-jwt
