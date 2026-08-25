@@ -16,6 +16,64 @@ function botNoise(player, category, random) {
   return { skill, random: random() };
 }
 
+let runtimeDefinitions = {};
+let runtimeContent = {};
+
+function runtimeDefinition(gameId, settings = null) {
+  return settings?.gameDefinitions?.[gameId]
+    ?? runtimeDefinitions?.[gameId]
+    ?? {};
+}
+
+function runtimeConfig(gameId, settings = null) {
+  const config = runtimeDefinition(gameId, settings)?.config;
+  return config && typeof config === 'object' && !Array.isArray(config) ? config : {};
+}
+
+function contentRows(gameId, contentType, settings = null) {
+  const source = settings?.gameContent?.[gameId]
+    ?? runtimeContent?.[gameId]
+    ?? [];
+  return source
+    .filter((item) => item?.active !== false && item?.content_type === contentType)
+    .sort((left, right) => Number(left.sort_order ?? 0) - Number(right.sort_order ?? 0))
+    .map((item) => item.payload)
+    .filter(Boolean);
+}
+
+function finiteNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function boundedInteger(value, fallback, min, max) {
+  return Math.round(clamp(finiteNumber(value, fallback), min, max));
+}
+
+function validQuestion(value) {
+  return value
+    && typeof value.prompt === 'string'
+    && Number.isFinite(Number(value.answer));
+}
+
+function validComparison(value) {
+  return value
+    && Array.isArray(value.left)
+    && Array.isArray(value.right)
+    && value.left.length >= 2
+    && value.right.length >= 2
+    && Number.isFinite(Number(value.left[1]))
+    && Number.isFinite(Number(value.right[1]));
+}
+
+function validPrompt(value) {
+  return value && Array.isArray(value.choices) && value.choices.length === 2;
+}
+
+function validPattern(value) {
+  return value && Array.isArray(value.cells) && value.cells.every((cell) => Number.isInteger(Number(cell)));
+}
+
 export const GAME_CATALOG = Object.freeze({
   reaction: {
     id: 'reaction',
@@ -24,9 +82,15 @@ export const GAME_CATALOG = Object.freeze({
     duration: 20,
     description: 'Wait for the signal and react. False starts are heavily penalized.',
     instructions: 'Press ARM. When the panel changes to GO, tap immediately.',
-    create(seed) {
+    create(seed, players, settings) {
       const random = seededRandom(seed);
-      return { delayMs: 1200 + Math.floor(random() * 2500), targetTrials: 1 };
+      const config = runtimeConfig('reaction', settings);
+      const minimum = boundedInteger(config.delayMinMs, 1200, 500, 5000);
+      const maximum = boundedInteger(config.delayMaxMs, 3700, minimum + 100, 8000);
+      return {
+        delayMs: minimum + Math.floor(random() * (maximum - minimum)),
+        targetTrials: boundedInteger(config.targetTrials, 1, 1, 5),
+      };
     },
     scoreSubmission(submission) {
       const reactionMs = Number(submission?.reactionMs);
@@ -52,7 +116,10 @@ export const GAME_CATALOG = Object.freeze({
     duration: 20,
     description: 'Stop as close as possible to exactly 5.000 seconds.',
     instructions: 'Start the hidden timer, count internally, then press STOP.',
-    create() { return { targetMs: 5000 }; },
+    create(seed, players, settings) {
+      const config = runtimeConfig('stop-clock', settings);
+      return { targetMs: boundedInteger(config.targetMs, 5000, 1000, 30000) };
+    },
     scoreSubmission(submission, config) {
       const elapsedMs = Number(submission?.elapsedMs);
       const error = Math.abs(elapsedMs - config.targetMs);
@@ -79,9 +146,20 @@ export const GAME_CATALOG = Object.freeze({
     duration: 35,
     description: 'Memorize the highlighted cells, then reproduce the pattern.',
     instructions: 'Study the grid. When it goes dark, select every remembered cell.',
-    create(seed) {
+    create(seed, players, settings) {
       const random = seededRandom(seed);
-      return { pattern: choice(MEMORY_PATTERNS, random), size: 16, revealMs: 2200 };
+      const config = runtimeConfig('memory-grid', settings);
+      const configuredPatterns = contentRows('memory-grid', 'pattern', settings)
+        .filter(validPattern)
+        .map((item) => item.cells.map(Number));
+      const patterns = configuredPatterns.length ? configuredPatterns : MEMORY_PATTERNS;
+      const size = boundedInteger(config.size, 16, 9, 36);
+      const pattern = choice(patterns, random).filter((cell) => cell >= 0 && cell < size);
+      return {
+        pattern: pattern.length ? pattern : MEMORY_PATTERNS[0],
+        size,
+        revealMs: boundedInteger(config.revealMs, 2200, 500, 10000),
+      };
     },
     scoreSubmission(submission, config) {
       const selected = new Set((submission?.selected ?? []).map(Number));
@@ -112,19 +190,20 @@ export const GAME_CATALOG = Object.freeze({
     duration: 30,
     description: 'Estimate the answer. Percentage error decides the winner.',
     instructions: 'Enter one numeric estimate. Answers remain hidden until reveal.',
-    create(seed) {
+    create(seed, players, settings) {
       const random = seededRandom(seed);
-      return { question: choice(ESTIMATION_QUESTIONS, random) };
+      const configured = contentRows('closest-wins', 'question', settings).filter(validQuestion);
+      return { question: choice(configured.length ? configured : ESTIMATION_QUESTIONS, random) };
     },
     scoreSubmission(submission, config) {
       const answer = Number(submission?.answer);
-      const truth = config.question.answer;
+      const truth = Number(config.question.answer);
       const errorPercent = Number.isFinite(answer) ? Math.abs(answer - truth) / Math.max(Math.abs(truth), 1) : 1;
       return {
         raw: errorPercent,
         normalizedScore: clamp(1 - Math.log10(1 + errorPercent * 9), 0, 1),
         tieBreaker: errorPercent,
-        label: Number.isFinite(answer) ? `${answer.toLocaleString()} ${config.question.unit} · ${(errorPercent * 100).toFixed(1)}% off` : 'No answer',
+        label: Number.isFinite(answer) ? `${answer.toLocaleString()} ${config.question.unit ?? ''} · ${(errorPercent * 100).toFixed(1)}% off` : 'No answer',
       };
     },
     simulate(player, seed, config) {
@@ -143,15 +222,24 @@ export const GAME_CATALOG = Object.freeze({
     duration: 35,
     description: 'Decide whether the right-hand value is higher or lower.',
     instructions: 'Complete five comparisons. Accuracy matters more than speed.',
-    create(seed) {
+    create(seed, players, settings) {
       const random = seededRandom(seed);
-      return { pairs: shuffle(HIGHER_LOWER_PAIRS, random).slice(0, 5) };
+      const config = runtimeConfig('higher-lower', settings);
+      const configured = contentRows('higher-lower', 'comparison', settings).filter(validComparison);
+      const source = configured.length ? configured : HIGHER_LOWER_PAIRS.map((pair) => ({
+        left: pair.left,
+        right: pair.right,
+        unit: pair.unit,
+      }));
+      return {
+        pairs: shuffle(source, random).slice(0, boundedInteger(config.pairCount, 5, 1, 10)),
+      };
     },
     scoreSubmission(submission, config) {
       const answers = submission?.answers ?? [];
       let correct = 0;
       config.pairs.forEach((pair, index) => {
-        const truth = pair.right[1] > pair.left[1] ? 'higher' : 'lower';
+        const truth = Number(pair.right[1]) > Number(pair.left[1]) ? 'higher' : 'lower';
         if (answers[index] === truth) correct += 1;
       });
       return {
@@ -165,7 +253,7 @@ export const GAME_CATALOG = Object.freeze({
       const random = seededRandom(`${seed}:${player.id}`);
       const { skill } = botNoise(player, 'knowledge', random);
       const answers = config.pairs.map((pair) => {
-        const truth = pair.right[1] > pair.left[1] ? 'higher' : 'lower';
+        const truth = Number(pair.right[1]) > Number(pair.left[1]) ? 'higher' : 'lower';
         return random() < 0.48 + skill * 0.48 ? truth : truth === 'higher' ? 'lower' : 'higher';
       });
       return { answers, elapsedMs: Math.round(9000 + random() * 9000) };
@@ -179,15 +267,16 @@ export const GAME_CATALOG = Object.freeze({
     duration: 25,
     description: 'Choose A or B. Only the smaller group wins.',
     instructions: 'Choose privately. A perfect tie gives everyone a neutral score.',
-    create(seed) {
+    create(seed, players, settings) {
       const random = seededRandom(seed);
-      const prompts = [
-        ['Take the lift', 'Take the stairs'],
-        ['Risk the mystery box', 'Bank the safe reward'],
-        ['Morning person', 'Night person'],
-        ['Choose certainty', 'Choose chaos'],
+      const configured = contentRows('minority-rules', 'prompt', settings).filter(validPrompt);
+      const prompts = configured.length ? configured : [
+        { choices: ['Take the lift', 'Take the stairs'] },
+        { choices: ['Risk the mystery box', 'Bank the safe reward'] },
+        { choices: ['Morning person', 'Night person'] },
+        { choices: ['Choose certainty', 'Choose chaos'] },
       ];
-      return { choices: choice(prompts, random) };
+      return { choices: choice(prompts, random).choices };
     },
     scoreAll(submissions) {
       const counts = { A: 0, B: 0 };
@@ -216,7 +305,13 @@ export const GAME_CATALOG = Object.freeze({
     duration: 30,
     description: 'Cooperate or betray. Your payout depends on the room.',
     instructions: 'Choose privately. Trust can pay, but betrayal can pay more.',
-    create() { return { matrix: { CC: 3, BC: 5, CB: 0, BB: 1 } }; },
+    create(seed, players, settings) {
+      const config = runtimeConfig('prisoners-dilemma', settings);
+      const matrix = config.matrix && typeof config.matrix === 'object'
+        ? config.matrix
+        : { CC: 3, BC: 5, CB: 0, BB: 1 };
+      return { matrix };
+    },
     scoreAll(submissions, config, players) {
       const ordered = [...players].sort((a, b) => a.id.localeCompare(b.id));
       const output = {};
@@ -227,8 +322,8 @@ export const GAME_CATALOG = Object.freeze({
         const rightChoice = submissions[right.id]?.choice ?? 'cooperate';
         const leftKey = `${leftChoice === 'betray' ? 'B' : 'C'}${rightChoice === 'betray' ? 'B' : 'C'}`;
         const rightKey = `${rightChoice === 'betray' ? 'B' : 'C'}${leftChoice === 'betray' ? 'B' : 'C'}`;
-        const leftPoints = config.matrix[leftKey];
-        const rightPoints = config.matrix[rightKey];
+        const leftPoints = Number(config.matrix[leftKey]);
+        const rightPoints = Number(config.matrix[rightKey]);
         output[left.id] = { raw: leftPoints, normalizedScore: leftPoints / 5, tieBreaker: 0, label: `${leftPoints} points · ${leftChoice}` };
         output[right.id] = { raw: rightPoints, normalizedScore: rightPoints / 5, tieBreaker: 0, label: `${rightPoints} points · ${rightChoice}` };
       }
@@ -272,6 +367,34 @@ export const GAME_CATALOG = Object.freeze({
     },
   },
 });
+
+const BASE_GAME_METADATA = Object.fromEntries(Object.entries(GAME_CATALOG).map(([id, game]) => [id, {
+  name: game.name,
+  description: game.description,
+  instructions: game.instructions,
+  duration: game.duration,
+}]));
+
+export function applyGameDefinitions(definitions = {}) {
+  runtimeDefinitions = definitions && typeof definitions === 'object' ? structuredClone(definitions) : {};
+  for (const [id, game] of Object.entries(GAME_CATALOG)) {
+    const base = BASE_GAME_METADATA[id];
+    const definition = runtimeDefinitions[id] ?? {};
+    game.name = String(definition.name ?? base.name).slice(0, 80);
+    game.description = String(definition.description ?? base.description).slice(0, 500);
+    game.instructions = String(definition.instructions ?? base.instructions).slice(0, 800);
+    game.duration = boundedInteger(definition.duration_seconds, base.duration, 5, 180);
+  }
+}
+
+export function applyGameContent(content = {}) {
+  runtimeContent = content && typeof content === 'object' ? structuredClone(content) : {};
+}
+
+export function enabledGameIds(definitions = runtimeDefinitions) {
+  const enabled = Object.keys(GAME_CATALOG).filter((id) => definitions?.[id]?.enabled !== false);
+  return enabled.length ? enabled : Object.keys(GAME_CATALOG);
+}
 
 export function getGame(gameId) {
   const game = GAME_CATALOG[gameId];

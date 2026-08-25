@@ -68,11 +68,13 @@ export function appHeader(state) {
   const round = currentRound(state);
   const online = state.mode === 'online';
   return `<header class="app-header glass">
-    <button class="brand" data-action="route" data-route="${state.session.status === PHASES.LOBBY ? 'landing' : 'session'}"><span class="brand-mark">FE</span><span><strong>FRIEND EXCHANGE</strong><small>${online ? `ROOM ${escapeHtml(state.online.roomCode ?? '------')}` : state.session.status === 'active' ? `ROUND ${state.session.roundIndex + 1} · ${round ? getGame(round.gameId).name : 'LIVE'}` : 'GAMEKELDER'}</small></span></button>
+    <button class="brand" data-action="menu-go-home" title="Return to the main menu while keeping this room"><span class="brand-mark">FE</span><span><strong>FRIEND EXCHANGE</strong><small>${online ? `ROOM ${escapeHtml(state.online.roomCode ?? '------')}` : state.session.status === 'active' ? `ROUND ${state.session.roundIndex + 1} · ${round ? getGame(round.gameId).name : 'LIVE'}` : 'GAMEKELDER'}</small></span></button>
     ${state.route === 'session' ? nav(state) : '<div></div>'}
     <div class="header-actions">
       ${online ? `<span class="header-online-status ${state.online.realtimeStatus === 'SUBSCRIBED' ? 'is-live' : ''}"><i></i><b>${state.online.realtimeStatus === 'SUBSCRIBED' ? 'ONLINE' : 'SYNCING'}</b></span>` : ''}
       ${state.route === 'session' ? `<button class="status-chip" data-action="switch-player" ${online ? 'disabled' : ''}>${playerAvatar(selected)}<span><small>${online ? 'Signed in as' : 'Playing as'}</small><b>${escapeHtml(selected.name)}</b></span></button>` : ''}
+      <button class="button header-admin-button" data-action="open-admin" title="Open administrator control center">ADMIN</button>
+      <button class="button button--warm header-menu-button" data-action="open-session-menu">MENU</button>
       <button class="icon-button" data-action="open-controller" title="Open controller tab">↗</button>
     </div>
   </header>`;

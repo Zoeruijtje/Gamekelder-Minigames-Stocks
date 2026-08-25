@@ -111,6 +111,23 @@ export class OnlineGameAdapter {
     return data;
   }
 
+  async leaveRoom(roomId) {
+    await this.connect();
+    const { data, error } = await this.db.rpc('leave_room', { p_room_id: roomId });
+    if (error) throw error;
+    await this.unsubscribeRoom(roomId);
+    return data;
+  }
+
+  async returnRoomToLobby(roomId) {
+    await this.connect();
+    const { data, error } = await this.db.rpc('host_return_room_to_lobby', {
+      p_room_id: roomId,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   async startSession(roomId, settings, gameQueue) {
     await this.connect();
     const { data, error } = await this.db.rpc('start_online_session', {
