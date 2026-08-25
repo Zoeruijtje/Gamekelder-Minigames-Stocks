@@ -1,1 +1,0 @@
-This placeholder contains no credentials. The one-time owner bootstrap code is supplied privately after the release is deployed and must never be committed.
