@@ -1,6 +1,25 @@
 import { createInitialState, normalizeState, tickRealQuotes } from './engine/session.js';
 import { LocalStateTransport } from './services/storage.js';
 
+function persistenceSafeState(state) {
+  const safe = structuredClone(state);
+  if (safe.admin) {
+    safe.admin = {
+      enabled: Boolean(safe.admin.enabled),
+      status: 'signed-out',
+      user: null,
+      role: null,
+      snapshot: null,
+      publicConfig: safe.admin.publicConfig ?? null,
+      section: safe.admin.section ?? 'overview',
+      returnRoute: safe.admin.returnRoute ?? 'landing',
+      error: null,
+      busy: false,
+    };
+  }
+  return safe;
+}
+
 export class AppStore {
   constructor() {
     this.transport = new LocalStateTransport();
@@ -8,7 +27,8 @@ export class AppStore {
     this.listeners = new Set();
     this.transport.subscribe((incoming) => {
       if (incoming.updatedAt === this.state.updatedAt) return;
-      this.state = incoming;
+      const ephemeralAdmin = this.state.admin;
+      this.state = ephemeralAdmin ? { ...incoming, admin: ephemeralAdmin } : incoming;
       this.emit({ remote: true });
     });
   }
@@ -20,7 +40,9 @@ export class AppStore {
   setState(nextState, meta = {}) {
     const normalized = normalizeState({ ...nextState, updatedAt: new Date().toISOString() });
     this.state = normalized;
-    this.transport.save(normalized, !meta.remote);
+    if (meta.persist !== false) {
+      this.transport.save(persistenceSafeState(normalized), !meta.remote);
+    }
     this.emit(meta);
     return normalized;
   }
