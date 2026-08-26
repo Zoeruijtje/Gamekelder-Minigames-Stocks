@@ -25,28 +25,17 @@ function signedOut(state) {
   const disabled = !state.admin?.enabled || state.admin?.busy;
   return `<main class="admin-shell">
     ${adminHeader(state)}
-    <section class="admin-auth-grid">
+    <section class="admin-auth-grid admin-auth-grid--single">
       <article class="admin-auth-card glass">
-        <span class="eyebrow">ADMIN SIGN IN</span><h1>CONTROL THE MARKET</h1><p>This account is separate from temporary player identities. Signing in here does not disconnect an active room in this browser.</p>
+        <span class="eyebrow">OWNER SIGN IN</span><h1>CONTROL THE MARKET</h1><p>Use the permanent Friend Exchange administrator account. This session remains separate from temporary player identities and active rooms.</p>
         ${state.admin?.enabled ? '' : '<div class="admin-warning">Supabase administration is not configured in this build.</div>'}
         ${state.admin?.error ? `<div class="admin-warning">${escapeHtml(state.admin.error)}</div>` : ''}
-        <form data-form="admin-login" class="admin-form">
-          <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required ${disabled ? 'disabled' : ''}/></label>
-          <label class="field"><span>Password</span><input name="password" type="password" minlength="12" autocomplete="current-password" required ${disabled ? 'disabled' : ''}/></label>
+        <form data-form="admin-login" class="admin-form" data-preserve-scope="admin-login">
+          <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" value="zalessandro1998@gmail.com" required ${disabled ? 'disabled' : ''}/></label>
+          <label class="field"><span>Password</span><input name="password" type="password" minlength="8" autocomplete="current-password" required ${disabled ? 'disabled' : ''}/></label>
           <button class="button button--warm button--large full-width" type="submit" ${disabled ? 'disabled' : ''}>${state.admin?.busy ? 'SIGNING IN…' : 'SIGN IN'}</button>
         </form>
-      </article>
-      <article class="admin-auth-card admin-auth-card--setup glass">
-        <span class="eyebrow">FIRST OWNER ONLY</span><h2>INITIAL ADMIN SETUP</h2><p>Use the one-time bootstrap code supplied privately with the deployment. After the first owner is created, this route permanently refuses additional bootstrap attempts.</p>
-        <details><summary>CREATE THE FIRST OWNER ACCOUNT</summary>
-          <form data-form="admin-bootstrap" class="admin-form">
-            <label class="field"><span>Email</span><input name="email" type="email" autocomplete="username" required ${disabled ? 'disabled' : ''}/></label>
-            <label class="field"><span>New password</span><input name="password" type="password" minlength="12" autocomplete="new-password" required ${disabled ? 'disabled' : ''}/><small class="field-help">Use at least 12 characters and a unique password.</small></label>
-            <label class="field"><span>One-time bootstrap code</span><input name="bootstrapCode" type="password" autocomplete="one-time-code" required ${disabled ? 'disabled' : ''}/></label>
-            <button class="button button--large full-width" type="submit" ${disabled ? 'disabled' : ''}>CREATE OWNER</button>
-          </form>
-        </details>
-        <small class="admin-security-note">The public website contains only a Supabase publishable key. Privileged actions are checked server-side against the administrator role table.</small>
+        <small class="admin-security-note">Administrator access is verified server-side. No privileged credential is stored in the website source.</small>
       </article>
     </section>
   </main>`;
@@ -54,6 +43,25 @@ function signedOut(state) {
 
 function unauthorized(state) {
   return `<main class="admin-shell">${adminHeader(state)}<section class="admin-empty glass"><span class="eyebrow">ACCESS DENIED</span><h1>THIS ACCOUNT IS NOT AN ADMINISTRATOR</h1><p>${escapeHtml(state.admin?.user?.email ?? 'The signed-in account')} is authenticated but has no active Friend Exchange administrator role.</p><button class="button" data-action="admin-sign-out">SIGN OUT</button></section></main>`;
+}
+
+function passwordChangeRequired(state) {
+  const disabled = state.admin?.busy;
+  return `<main class="admin-shell">
+    ${adminHeader(state)}
+    <section class="admin-auth-grid admin-auth-grid--single">
+      <article class="admin-auth-card admin-password-change glass">
+        <span class="eyebrow">SECURITY REQUIRED</span><h1>REPLACE THE TEMPORARY PASSWORD</h1><p>The initial owner credential is temporary. Create a unique password before the control center unlocks.</p>
+        ${state.admin?.error ? `<div class="admin-warning">${escapeHtml(state.admin.error)}</div>` : ''}
+        <form data-form="admin-change-password" class="admin-form" data-preserve-scope="admin-change-password">
+          <label class="field"><span>New password</span><input name="password" type="password" minlength="14" autocomplete="new-password" required ${disabled ? 'disabled' : ''}/><small class="field-help">Use at least 14 characters and do not reuse a password from another service.</small></label>
+          <label class="field"><span>Confirm new password</span><input name="confirmPassword" type="password" minlength="14" autocomplete="new-password" required ${disabled ? 'disabled' : ''}/></label>
+          <button class="button button--warm button--large full-width" type="submit" ${disabled ? 'disabled' : ''}>${disabled ? 'UPDATING…' : 'UPDATE PASSWORD & CONTINUE'}</button>
+        </form>
+        <small class="admin-security-note">The new password is sent directly to Supabase Auth and is never written to this repository or application state.</small>
+      </article>
+    </section>
+  </main>`;
 }
 
 function adminNav(state) {
@@ -173,6 +181,7 @@ export function adminPage(state) {
   const admin = state.admin ?? {};
   if (!admin.user) return signedOut(state);
   if (admin.status === 'unauthorized') return unauthorized(state);
+  if (admin.mustChangePassword) return passwordChangeRequired(state);
   if (admin.status !== 'ready' || !admin.snapshot) {
     return `<main class="admin-shell">${adminHeader(state)}<section class="admin-empty glass"><span class="online-spinner"></span><h1>LOADING ADMINISTRATION</h1><p>${escapeHtml(admin.error ?? 'Validating permissions and loading configuration…')}</p></section></main>`;
   }

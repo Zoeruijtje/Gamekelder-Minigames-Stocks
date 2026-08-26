@@ -19,7 +19,7 @@ Returning to the public menu is navigation only. It does not silently cancel an 
 
 The global control center uses a separate Supabase Auth session from temporary player identities. Global administrator access is stored in database roles and checked server-side.
 
-The first owner is created through a one-time high-entropy bootstrap code. After that bootstrap is consumed, the public bootstrap path is permanently closed.
+The owner uses a login-only account. The initial temporary credential is provisioned server-side and must be replaced on first login; there is no public setup form.
 
 An owner or administrator can:
 

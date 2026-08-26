@@ -167,6 +167,20 @@ try {
   assert.ok(Number(order.trade.quantity) > 0);
   console.log(`PASS transactional fictional order in ${targetAsset.symbol}`);
 
+  const protection = first(await rpc(hostToken, 'upsert_protective_order', {
+    p_portfolio_id: hostPortfolio.id,
+    p_symbol: targetAsset.symbol,
+    p_order_type: 'stop_loss',
+    p_trigger_price: Number(targetAsset.price) * 0.999,
+    p_take_profit_price: null,
+    p_trail_percent: null,
+    p_quantity_percent: 100,
+    p_idempotency_key: `ci-risk-${crypto.randomUUID()}`,
+  }));
+  assert.equal(protection.status, 'active');
+  assert.equal(protection.symbol, targetAsset.symbol);
+  console.log('PASS owner-scoped stop loss created during the open trading phase');
+
   const waitMs = Math.max(0, new Date(round.locks_at).getTime() - Date.now() + 350);
   await sleep(waitMs);
 
@@ -248,13 +262,19 @@ try {
     assert.ok(Math.abs(move.next - move.old) > 0.0001, 'Expected visible before/after price movement');
   }
 
-  const position = hostSnapshot.my_positions.find((candidate) => candidate.symbol === targetAsset.symbol);
-  assert.ok(position, 'Purchased position should remain in the reconnect snapshot');
   const targetMove = hostMoves.find((move) => move.owner === targetAsset.owner_id);
-  const directImpact = Number(position.quantity) * (targetMove.next - targetMove.old);
-  assert.ok(Number.isFinite(directImpact));
-  assert.notEqual(directImpact, 0);
-  console.log(`PASS synchronized before/after market prices and portfolio impact (${directImpact.toFixed(2)})`);
+  assert.ok(targetMove.percent < 0, 'The slower player should produce a negative move for the protected stock');
+  const filledProtection = hostSnapshot.my_protective_orders.find((candidate) => candidate.id === protection.id);
+  assert.equal(filledProtection.status, 'filled', 'Stop loss should execute at the authoritative settlement price');
+  assert.ok(filledProtection.filled_trade_id);
+  const protectiveTrade = hostSnapshot.my_trades.find((candidate) => candidate.protective_order_id === protection.id);
+  assert.ok(protectiveTrade, 'Protective execution must appear in private trade history');
+  assert.equal(protectiveTrade.side, 'sell');
+  assert.ok(Number.isFinite(Number(protectiveTrade.realized_pnl)));
+  assert.ok(hostSnapshot.my_equity_history.length >= 2, 'Reconnect snapshot should include observed portfolio-equity events');
+  const remainingPosition = hostSnapshot.my_positions.find((candidate) => candidate.symbol === targetAsset.symbol);
+  assert.equal(remainingPosition, undefined, 'A 100% stop loss should close the protected position');
+  console.log(`PASS synchronized prices and stop-loss execution (${Number(protectiveTrade.realized_pnl).toFixed(2)} realised P/L)`);
 
   const completedRound = first(await rpc(hostToken, 'complete_round', { p_round_id: round.id }));
   assert.equal(completedRound.status, 'complete');

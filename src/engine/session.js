@@ -1,5 +1,11 @@
 import { CATEGORY_LABELS, PHASES } from '../config.js';
-import { placeOrder, portfolioSnapshot } from './portfolio.js';
+import {
+  cancelProtectiveOrder,
+  evaluateProtectiveOrders,
+  placeOrder,
+  portfolioSnapshot,
+  upsertProtectiveOrder,
+} from './portfolio.js';
 import { defaultRatings, explainMove, settleFriendMarket, updateRatings } from './pricing.js';
 import { GAME_CATALOG, getGame, scoreGame, simulateMissingSubmissions } from './games.js';
 import { round, seededRandom, shuffle, uid } from './random.js';
@@ -190,6 +196,27 @@ export function settleRound(state) {
   round.phase = PHASES.RESULTS;
   next.markets.friend = settlement.market;
   next.players = updateRatings(next.players, settlement.ranked, round.category, settlement.expectation);
+  const friendQuotes = friendQuotesBySymbol(next);
+  const protectiveTriggers = [];
+  for (const player of next.players) {
+    const evaluated = evaluateProtectiveOrders(next.accounts.friend[player.id], friendQuotes, {
+      assetType: 'friend',
+      roomId: next.session.id,
+      roundId: round.id,
+      referenceId: round.id,
+      quoteStatus: 'SETTLEMENT',
+    });
+    next.accounts.friend[player.id] = evaluated.account;
+    evaluated.fills.forEach((fill) => {
+      protectiveTriggers.push({ playerId: player.id, ...fill });
+      next.session.activity.unshift({
+        id: uid('activity'),
+        text: `${player.name}'s protection sold ${fill.quantity.toFixed(3)} ${fill.symbol}`,
+        at: nowIso(),
+      });
+    });
+  }
+  next.ui.lastProtectiveTriggers = protectiveTriggers;
   next.session.phase = PHASES.RESULTS;
   next.session.phaseEndsAt = null;
   next.ui.modal = 'results';
@@ -343,6 +370,38 @@ export function placePaperOrder(state, { playerId, marketType, symbol, side, not
   return { state: next, fill: result.fill };
 }
 
+export function saveProtectiveOrder(state, { playerId, marketType, symbol, type, stopPrice, takeProfitPrice, trailPercent, quantityPercent, idempotencyKey }) {
+  const next = structuredClone(state);
+  const player = next.players.find((candidate) => candidate.id === playerId);
+  if (!player) throw new Error('Select a valid player.');
+  const account = next.accounts[marketType]?.[playerId];
+  if (!account) throw new Error('Portfolio is unavailable.');
+  if (marketType === 'friend') {
+    const round = currentRound(next);
+    if (!round || round.phase !== PHASES.TRADING) throw new Error('Friend Market protection can only be changed while trading is open.');
+  }
+  const quotes = marketType === 'friend' ? friendQuotesBySymbol(next) : next.markets.real;
+  const result = upsertProtectiveOrder(account, quotes, {
+    symbol, type, stopPrice, takeProfitPrice, trailPercent, quantityPercent, idempotencyKey,
+  });
+  next.accounts[marketType][playerId] = result.account;
+  next.session.activity.unshift({ id: uid('activity'), text: `${player.name} protected ${symbol} with ${String(type).replaceAll('_', ' ')}`, at: nowIso() });
+  return { state: next, order: result.order };
+}
+
+export function removeProtectiveOrder(state, { playerId, marketType, orderId }) {
+  const next = structuredClone(state);
+  const account = next.accounts[marketType]?.[playerId];
+  if (!account) throw new Error('Portfolio is unavailable.');
+  if (marketType === 'friend') {
+    const round = currentRound(next);
+    if (!round || round.phase !== PHASES.TRADING) throw new Error('Friend Market protection can only be cancelled while trading is open.');
+  }
+  const result = cancelProtectiveOrder(account, orderId);
+  next.accounts[marketType][playerId] = result.account;
+  return { state: next, order: result.order };
+}
+
 function unlockFirstTrade(state, playerId) {
   const player = state.players.find((candidate) => candidate.id === playerId);
   if (player && !player.achievements.includes('first-trade')) player.achievements.push('first-trade');
@@ -358,9 +417,20 @@ export function tickRealQuotes(state) {
     asset.price = round(Math.max(1, asset.price * (1 + drift)), 2);
     asset.changePercent = round(((asset.price / asset.openPrice) - 1) * 100, 2);
     asset.updatedAt = nowIso();
-    asset.history.push({ price: asset.price, at: asset.updatedAt });
-    if (asset.history.length > 40) asset.history.shift();
+    asset.history.push({ price: asset.price, at: asset.updatedAt, reason: 'DEMO quote tick' });
+    if (asset.history.length > 80) asset.history.shift();
   });
+  const triggers = [];
+  for (const player of next.players) {
+    const evaluated = evaluateProtectiveOrders(next.accounts.real[player.id], next.markets.real, {
+      assetType: 'real',
+      referenceId: `demo-tick:${tick}`,
+      quoteStatus: 'DEMO PROTECTIVE',
+    });
+    next.accounts.real[player.id] = evaluated.account;
+    evaluated.fills.forEach((fill) => triggers.push({ playerId: player.id, ...fill }));
+  }
+  if (triggers.length) next.ui.lastProtectiveTriggers = triggers;
   return next;
 }
 

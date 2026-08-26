@@ -5,6 +5,6 @@
 - [ ] Admin schema migration deployed
 - [ ] Admin bootstrap Edge Function deployed
 - [ ] Security and performance advisors reviewed
-- [ ] First-owner bootstrap tested once
+- [ ] Login-only owner provisioning and mandatory password change verified
 - [ ] GitHub Pages deployment green
 - [ ] Main-menu, resume-room, leave-room and edit-lobby flows verified on phone and desktop

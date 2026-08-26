@@ -15,6 +15,7 @@ function persistenceSafeState(state) {
       returnRoute: safe.admin.returnRoute ?? 'landing',
       error: null,
       busy: false,
+      mustChangePassword: false,
     };
   }
   return safe;
@@ -43,7 +44,7 @@ export class AppStore {
     if (meta.persist !== false) {
       this.transport.save(persistenceSafeState(normalized), !meta.remote);
     }
-    this.emit(meta);
+    if (!meta.silent) this.emit(meta);
     return normalized;
   }
 
@@ -68,8 +69,8 @@ export class AppStore {
     this.setState(createInitialState());
   }
 
-  tickQuotes() {
-    if (document.hidden) return;
-    this.setState(tickRealQuotes(this.state), { quoteTick: true });
+  tickQuotes(meta = {}) {
+    if (document.hidden) return this.state;
+    return this.setState(tickRealQuotes(this.state), { quoteTick: true, ...meta });
   }
 }

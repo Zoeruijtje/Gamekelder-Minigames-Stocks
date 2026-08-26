@@ -55,7 +55,7 @@ def inline_app() -> str:
     html = re.sub(r'<link[^>]+rel="(?:preload|manifest)"[^>]*>', "", html)
     html = html.replace('<script src="supabase-config.js"></script>', '')
     css = "\n".join((ROOT / name).read_text(encoding="utf-8") for name in (
-        "styles.css", "styles-pages.css", "styles-interaction.css", "responsive.css", "online.css", "trading-window.css"
+        "styles.css", "styles-pages.css", "styles-interaction.css", "responsive.css", "online.css", "trading-window.css", "portfolio-advanced.css", "admin.css"
     ))
 
     replacements = {
@@ -69,7 +69,7 @@ def inline_app() -> str:
         css = css.replace(name, value)
 
     html = re.sub(r'<link[^>]+href="styles\.css"[^>]*>', f"<style>{css}</style>", html)
-    html = re.sub(r'<link[^>]+href="(?:styles-pages|styles-interaction|responsive|background-hq|online|trading-window)\.css"[^>]*>', "", html)
+    html = re.sub(r'<link[^>]+href="(?:styles-pages|styles-interaction|responsive|background-hq|online|trading-window|portfolio-advanced|admin)\.css"[^>]*>', "", html)
     imports = json.dumps({"imports": module_map()})
     html = html.replace(
         '<script type="module" src="src/main.js"></script>',
@@ -79,6 +79,11 @@ def inline_app() -> str:
         '<script type="module" src="src/services/trading-deadline.js"></script>',
         '<script type="module">import "app:/src/services/trading-deadline.js";</script>',
     )
+    html = html.replace(
+        '<script type="module" src="src/control-center.js"></script>',
+        '<script type="module">import "app:/src/control-center.js";</script>',
+    )
+    html = html.replace('<script type="module" src="src/services/backgroundLoader.js"></script>', '')
     return html
 
 
@@ -186,6 +191,103 @@ def complete_reaction_round(browser, html: str, screenshots: bool) -> None:
     print("PASS complete UI flow: visible trade countdown → trade → minigame → Friend Market repricing")
 
 
+
+def advanced_portfolio_and_interaction(browser, html: str, screenshots: bool) -> None:
+    page = browser.new_page(viewport={"width": 412, "height": 915})
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.set_content(html, wait_until="domcontentloaded", timeout=30_000)
+    wait_app(page)
+
+    page.get_by_role("button", name="CREATE LOCAL ROOM").click()
+    page.get_by_role("button", name="RING THE OPENING BELL").click()
+    page.get_by_role("button", name=re.compile("START PRE-ROUND TRADING")).click()
+    page.locator('.asset-row[data-market="friend"]').nth(1).click()
+    page.wait_for_selector('.order-modal')
+    amount = page.locator('form[data-form="order"] input[name="notional"]')
+    amount.fill('777')
+
+    # A quote tick no longer rebuilds the application DOM.
+    page.evaluate("window.__FE_STORE__.tickQuotes()")
+    assert amount.input_value() == '777', 'Quote tick reset the active order form'
+
+    # A genuine full state render preserves focused field value and selection.
+    page.evaluate("""() => window.__FE_STORE__.update((state) => {
+      state.online.lastSyncAt = new Date().toISOString();
+      return state;
+    }, { remote: true, onlineSync: true })""")
+    amount = page.locator('form[data-form="order"] input[name="notional"]')
+    assert amount.input_value() == '777', 'Remote room refresh reset the active order form'
+
+    page.get_by_role("button", name="€500").click()
+    page.get_by_role("button", name="PLACE FICTIONAL ORDER").click()
+    page.wait_for_selector('.order-modal', state='detached')
+    page.get_by_role("button", name="Portfolio").click()
+    page.wait_for_selector('.portfolio-advanced')
+    assert page.locator('.position-card').count() >= 1, 'Purchased holding did not become a managed position'
+    page.locator('.position-card').first.get_by_role('button', name='MANAGE POSITION').click()
+    page.wait_for_selector('.position-modal')
+    assert page.get_by_text('UNREALISED P/L').is_visible(), 'Position P/L is not visible'
+    assert page.locator('.advanced-chart').count() >= 1, 'Position profit graph is missing'
+
+    sell_input = page.locator('form[data-form="position-sell"] input[name="quantity"]')
+    sell_input.fill('1.000')
+    sell_input.dispatch_event('input')
+    assert page.locator('[data-sell-preview]').get_by_text('Sale proceeds').is_visible()
+    assert page.locator('[data-sell-preview]').get_by_text('Realised P/L').is_visible()
+
+    risk_form = page.locator('form[data-form="protective-order"]')
+    risk_form.locator('select[name="type"]').select_option('stop_loss')
+    current_price = page.evaluate("""() => {
+      const state = window.__FE_STORE__.getState();
+      const modal = state.ui.modal;
+      return Object.values(state.markets.friend).find((asset) => asset.symbol === modal.symbol).price;
+    }""")
+    risk_form.locator('input[name="stopPrice"]').fill(str(round(float(current_price) * .9, 2)))
+    risk_form.get_by_role('button', name=re.compile('ACTIVATE PROTECTION|UPDATE PROTECTION')).click()
+    page.wait_for_selector('.position-modal', state='detached')
+    protection_count = page.evaluate("""() => {
+      const state = window.__FE_STORE__.getState();
+      const account = state.accounts.friend[state.ui.selectedPlayerId];
+      return account.protectiveOrders.filter((order) => order.status === 'active').length;
+    }""")
+    assert protection_count == 1, 'Stop loss was not saved'
+    assert not errors, f'Advanced portfolio emitted JavaScript errors: {errors}'
+    if screenshots:
+        page.screenshot(path=str(ARTIFACTS / 'advanced-portfolio.png'), full_page=False)
+    page.close()
+    print('PASS advanced portfolio: P/L graph, sale outcome, protection and refresh-safe typing')
+
+
+def minigame_input_survives_render(browser, html: str) -> None:
+    page = browser.new_page(viewport={"width": 412, "height": 915})
+    page.set_content(html, wait_until="domcontentloaded", timeout=30_000)
+    wait_app(page)
+    page.get_by_role("button", name="CREATE LOCAL ROOM").click()
+    for button in page.locator('.game-toggle').all():
+        game_id = button.get_attribute('data-game-id')
+        active = 'is-active' in (button.get_attribute('class') or '')
+        if game_id != 'closest-wins' and active:
+            button.click()
+        if game_id == 'closest-wins' and not active:
+            button.click()
+    page.get_by_role("button", name="RING THE OPENING BELL").click()
+    page.get_by_role("button", name=re.compile("START PRE-ROUND TRADING")).click()
+    page.get_by_role("button", name=re.compile("END TRADING EARLY")).click()
+    page.get_by_role("button", name="START MINIGAME").click()
+    page.get_by_role("button", name=re.compile("START FOR")).click()
+    estimate = page.locator('form[data-form="estimate"] input[name="answer"]')
+    estimate.fill('12345')
+    page.evaluate("""() => window.__FE_STORE__.update((state) => {
+      state.online.lastSyncAt = new Date().toISOString();
+      return state;
+    }, { remote: true })""")
+    estimate = page.locator('form[data-form="estimate"] input[name="answer"]')
+    assert estimate.input_value() == '12345', 'Minigame answer was reset by a room refresh'
+    page.close()
+    print('PASS minigame input survives a full application rerender')
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--screenshots", action="store_true")
@@ -199,6 +301,8 @@ def main() -> int:
         try:
             responsive_matrix(browser, html, args.screenshots)
             complete_reaction_round(browser, html, args.screenshots)
+            advanced_portfolio_and_interaction(browser, html, args.screenshots)
+            minigame_input_survives_render(browser, html)
         finally:
             browser.close()
     print("All browser QA cases passed.")

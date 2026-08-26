@@ -31,6 +31,7 @@ function adminDefaults() {
     returnRoute: 'landing',
     error: null,
     busy: false,
+    mustChangePassword: false,
   };
 }
 
@@ -149,6 +150,7 @@ async function loadAdminSnapshot({ quiet = false } = {}) {
           ...state.admin,
           status: 'ready',
           user: { id: user.id, email: user.email },
+          mustChangePassword: Boolean(user.user_metadata?.must_change_password),
           role: snapshot?.admin?.role ?? 'admin',
           snapshot,
           busy: false,
@@ -164,6 +166,7 @@ async function loadAdminSnapshot({ quiet = false } = {}) {
           ...state.admin,
           status: 'unauthorized',
           user: { id: user.id, email: user.email },
+          mustChangePassword: Boolean(user.user_metadata?.must_change_password),
           role: null,
           snapshot: null,
           busy: false,
@@ -428,7 +431,7 @@ root.addEventListener('click', async (event) => {
         await adminAdapter.signOut();
         store.update((state) => {
           ensureAdminState(state);
-          state.admin = { ...state.admin, status: 'signed-out', user: null, role: null, snapshot: null, error: null, busy: false };
+          state.admin = { ...state.admin, status: 'signed-out', user: null, role: null, snapshot: null, error: null, busy: false, mustChangePassword: false };
           return state;
         }, { adminUi: true });
         notify('Administrator signed out.');
@@ -468,14 +471,14 @@ root.addEventListener('submit', async (event) => {
       notify('Administrator signed in.');
       return;
     }
-    if (formName === 'admin-bootstrap') {
-      await adminAdapter.bootstrapOwner({
-        email: data.get('email'),
-        password: data.get('password'),
-        bootstrapCode: data.get('bootstrapCode'),
-      });
-      await refreshAdminAndPublicConfig();
-      notify('Owner account created. The bootstrap code is now permanently disabled.');
+    if (formName === 'admin-change-password') {
+      const password = String(data.get('password') ?? '');
+      const confirmation = String(data.get('confirmPassword') ?? '');
+      if (password.length < 14) throw new Error('Use at least 14 characters for the permanent administrator password.');
+      if (password !== confirmation) throw new Error('The new passwords do not match.');
+      await adminAdapter.updatePassword(password);
+      await loadAdminSnapshot();
+      notify('Administrator password updated.');
       return;
     }
     if (formName === 'admin-settings') {
