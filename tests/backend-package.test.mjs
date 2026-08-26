@@ -82,13 +82,17 @@ test('the public first-owner bootstrap surface is removed', () => {
   const sql = read('supabase/migrations/20260826000929_friend_exchange_admin_login_only.sql');
   const template = read('src/ui/templates-admin.js');
   const adapter = read('src/services/admin-adapter.js');
+  const provision = read('supabase/functions/admin-login-provision/index.ts');
+
   assert.match(sql, /drop function if exists friend_exchange\.admin_bootstrap_owner/i);
   assert.match(sql, /drop table if exists friend_exchange\.admin_bootstrap_state/i);
   assert.doesNotMatch(template, /INITIAL ADMIN SETUP|admin-bootstrap/);
   assert.doesNotMatch(adapter, /bootstrapOwner|admin-bootstrap/);
-  const provision = read('supabase/functions/admin-login-provision/index.ts');
-  assert.match(provision, /OWNER_PASSWORD_HASH/);
+  assert.match(provision, /ADMIN_OWNER_EMAIL/);
+  assert.match(provision, /ADMIN_PROVISION_PASSWORD_HASH/);
+  assert.match(provision, /Deno\.env\.get/);
   assert.doesNotMatch(provision, /TempPass123/);
+  assert.doesNotMatch(provision, /\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}/);
   assert.match(template, /admin-change-password|REPLACE THE TEMPORARY PASSWORD/);
 });
 
