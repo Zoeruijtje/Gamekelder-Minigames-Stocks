@@ -6,7 +6,7 @@ import {
   PHASES,
   REAL_ASSETS,
 } from '../config.js';
-import { createAccount } from './portfolio.js';
+import { createAccount, normalizeAccount } from './portfolio.js';
 import { defaultRatings } from './pricing.js';
 import { clamp, round, uid } from './random.js';
 
@@ -163,6 +163,8 @@ export function createInitialState() {
       gameRuntime: null,
       quoteTick: 0,
       onlineBusy: false,
+      lastProtectiveTriggers: [],
+      portfolioGraphMode: 'profit',
     },
   };
 }
@@ -173,6 +175,21 @@ export function normalizeState(raw) {
   state.players = uniqueTickers((state.players ?? []).map(makePlayer));
   if (state.players.length < 1 || (state.players.length < 2 && state.mode !== 'online')) return createInitialState();
   state.online = { ...onlineDefaults(), ...(state.online ?? {}) };
+  state.accounts ??= createAccounts(state.players, state.settings ?? DEFAULT_SETTINGS);
+  state.accounts.friend ??= {};
+  state.accounts.real ??= {};
+  for (const player of state.players) {
+    state.accounts.friend[player.id] = normalizeAccount(
+      state.accounts.friend[player.id],
+      player.id,
+      state.settings?.startingFriendCash ?? DEFAULT_SETTINGS.startingFriendCash,
+    );
+    state.accounts.real[player.id] = normalizeAccount(
+      state.accounts.real[player.id],
+      player.id,
+      state.settings?.startingRealCash ?? DEFAULT_SETTINGS.startingRealCash,
+    );
+  }
   state.ui = {
     activeView: 'overview',
     modal: null,
@@ -184,6 +201,8 @@ export function normalizeState(raw) {
     gameRuntime: null,
     quoteTick: 0,
     onlineBusy: false,
+    lastProtectiveTriggers: [],
+    portfolioGraphMode: 'profit',
     ...(state.ui ?? {}),
   };
   if (!state.players.some((player) => player.id === state.ui.selectedPlayerId)) {

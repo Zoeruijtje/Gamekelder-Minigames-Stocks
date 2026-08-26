@@ -1,6 +1,6 @@
 import { PLAYER_COLORS, PHASES } from '../config.js';
 import { GAME_CATALOG, getGame } from '../engine/games.js';
-import { createAccount } from '../engine/portfolio.js';
+import { createAccount, normalizeAccount } from '../engine/portfolio.js';
 import { defaultRatings } from '../engine/pricing.js';
 import { seededRandom, shuffle } from '../engine/random.js';
 
@@ -27,6 +27,14 @@ export function ensureOnlineState(state) {
     ...state,
     online: { ...onlineDefaults(), ...(state.online ?? {}) },
   };
+}
+
+export function onlineSnapshotFingerprint(snapshot) {
+  if (!snapshot) return null;
+  const clone = structuredClone(snapshot);
+  delete clone.server_time;
+  if (clone.room) delete clone.room.updated_at;
+  return JSON.stringify(clone);
 }
 
 export function buildOnlineQueue(settings, seed) {
@@ -57,6 +65,12 @@ export function buildOnlineRoundSpec(state, sequence) {
 function number(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function mapPlayer(member, index) {
@@ -173,11 +187,11 @@ function mapRound(row, snapshot) {
 function mapAccounts(state, snapshot, players, userId) {
   const friend = Object.fromEntries(players.map((player) => [
     player.id,
-    createAccount(player.id, state.settings.startingFriendCash),
+    normalizeAccount(state.accounts.friend?.[player.id] ?? createAccount(player.id, state.settings.startingFriendCash), player.id, state.settings.startingFriendCash),
   ]));
   const real = Object.fromEntries(players.map((player) => [
     player.id,
-    state.accounts.real?.[player.id] ?? createAccount(player.id, state.settings.startingRealCash),
+    normalizeAccount(state.accounts.real?.[player.id] ?? createAccount(player.id, state.settings.startingRealCash), player.id, state.settings.startingRealCash),
   ]));
 
   const leaderboard = new Map((snapshot.leaderboard ?? []).map((entry) => [entry.user_id, entry]));
@@ -188,17 +202,60 @@ function mapAccounts(state, snapshot, players, userId) {
 
   const portfolio = (snapshot.my_portfolios ?? [])[0];
   if (portfolio && userId) {
-    friend[userId] = {
+    const riskOrders = (snapshot.my_protective_orders ?? []).map((order) => ({
+      id: order.id,
+      symbol: order.symbol,
+      type: order.order_type,
+      stopPrice: nullableNumber(order.trigger_price),
+      takeProfitPrice: nullableNumber(order.take_profit_price),
+      trailPercent: nullableNumber(order.trail_percent),
+      quantityPercent: number(order.quantity_percent, 100),
+      peakPrice: nullableNumber(order.peak_price),
+      status: order.status,
+      triggerReason: order.trigger_reason ?? null,
+      triggeredAt: order.triggered_at ?? null,
+      filledTradeId: order.filled_trade_id ?? null,
+      createdAt: order.created_at,
+      updatedAt: order.updated_at,
+      idempotencyKey: order.idempotency_key,
+    }));
+    const ledger = (snapshot.my_trades ?? []).filter((trade) => trade.portfolio_id === portfolio.id).map((trade) => ({
+      id: trade.id,
+      idempotencyKey: trade.order_id,
+      symbol: trade.symbol,
+      side: trade.side,
+      quantity: number(trade.quantity),
+      price: number(trade.fill_price),
+      gross: number(trade.gross),
+      realizedPnl: number(trade.realized_pnl),
+      assetType: 'friend',
+      quoteStatus: trade.protective_order_id ? 'PROTECTIVE' : 'ONLINE',
+      reason: trade.protective_trigger_reason ?? 'market',
+      protectiveOrderId: trade.protective_order_id ?? null,
+      createdAt: trade.created_at,
+    }));
+    const equityHistory = (snapshot.my_equity_history ?? []).filter((point) => point.portfolio_id === portfolio.id).map((point) => ({
+      id: point.id,
+      equity: number(point.equity),
+      cash: number(point.cash),
+      positionValue: number(point.position_value),
+      eventType: point.event_type,
+      referenceId: point.reference_id,
+      at: point.created_at,
+    }));
+    friend[userId] = normalizeAccount({
       ownerId: userId,
       cash: number(portfolio.cash),
       realizedPnl: number(portfolio.realized_pnl),
-      ledger: [],
+      ledger,
       portfolioId: portfolio.id,
+      protectiveOrders: riskOrders,
+      equityHistory,
       positions: Object.fromEntries((snapshot.my_positions ?? []).map((position) => [position.symbol, {
         quantity: number(position.quantity),
         averageCost: number(position.average_cost),
       }])),
-    };
+    }, userId, state.settings.startingFriendCash);
   }
   return { friend, real };
 }
@@ -271,6 +328,7 @@ export function applyOnlineSnapshot(inputState, snapshot, userId) {
     gameQueue: session?.settings?.gameQueue ?? state.online.gameQueue ?? [],
     leaderboard: snapshot.leaderboard ?? [],
     serverOffsetMs,
+    snapshotFingerprint: onlineSnapshotFingerprint(snapshot),
   };
   return state;
 }

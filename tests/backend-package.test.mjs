@@ -17,8 +17,14 @@ const expectedMigrations = [
   '20260824214933_friend_exchange_guest_rate_limits.sql',
   '20260824215242_friend_exchange_guest_cleanup.sql',
   '20260824220348_friend_exchange_guest_limit_deny_policy.sql',
-  '20260825112305_friend_exchange_routine_privilege_hardening.sql',
-  '20260825120000_friend_exchange_trading_deadline.sql',
+  '20260824221453_friend_exchange_routine_privilege_hardening.sql',
+  '20260824231059_friend_exchange_trading_deadline.sql',
+  '20260825210020_public_rls_and_market_history.sql',
+  '20260826000815_friend_exchange_admin_control_center.sql',
+  '20260826000911_friend_exchange_advanced_portfolio_controls.sql',
+  '20260826000929_friend_exchange_admin_login_only.sql',
+  '20260826002931_friend_exchange_admin_deny_policies.sql',
+  '20260826003403_friend_exchange_admin_risk_indexes.sql',
 ];
 
 test('the complete deployed Supabase migration ledger is versioned', () => {
@@ -52,10 +58,57 @@ test('guest identities are rate limited and authoritative settlement is server-s
 });
 
 test('the Friend Market trading deadline is enforced by Postgres, not only by the browser', () => {
-  const deadlineSql = read('supabase/migrations/20260825120000_friend_exchange_trading_deadline.sql');
+  const deadlineSql = read('supabase/migrations/20260824231059_friend_exchange_trading_deadline.sql');
   assert.match(deadlineSql, /locks_at\s+is\s+null\s+or\s+trading_round\.locks_at\s*<=\s*now\(\)/i);
   assert.match(deadlineSql, /Friend Market trading deadline has passed/);
   assert.match(deadlineSql, /create or replace function friend_exchange\.expire_trading_window/i);
   assert.match(deadlineSql, /if now\(\) < round_row\.locks_at then/i);
   assert.match(deadlineSql, /set status = 'locked'/i);
+});
+
+
+test('advanced portfolio protection is server-authoritative and owner-scoped', () => {
+  const sql = read('supabase/migrations/20260826000911_friend_exchange_advanced_portfolio_controls.sql');
+  assert.match(sql, /create table friend_exchange\.protective_orders/i);
+  assert.match(sql, /enable row level security/i);
+  assert.match(sql, /owner_id = \(select auth\.uid\(\)\)/i);
+  assert.match(sql, /process_protective_orders/i);
+  assert.match(sql, /apply_round_settlement_legacy_20260826_risk/i);
+  assert.match(sql, /Friend Market protection can only be changed while trading is open/i);
+  assert.match(sql, /protective_order_id/i);
+});
+
+test('the public first-owner bootstrap surface is removed', () => {
+  const sql = read('supabase/migrations/20260826000929_friend_exchange_admin_login_only.sql');
+  const template = read('src/ui/templates-admin.js');
+  const adapter = read('src/services/admin-adapter.js');
+  const provision = read('supabase/functions/admin-login-provision/index.ts');
+
+  assert.match(sql, /drop function if exists friend_exchange\.admin_bootstrap_owner/i);
+  assert.match(sql, /drop table if exists friend_exchange\.admin_bootstrap_state/i);
+  assert.doesNotMatch(template, /INITIAL ADMIN SETUP|admin-bootstrap/);
+  assert.doesNotMatch(adapter, /bootstrapOwner|admin-bootstrap/);
+  assert.match(provision, /ADMIN_OWNER_EMAIL/);
+  assert.match(provision, /ADMIN_PROVISION_PASSWORD_HASH/);
+  assert.match(provision, /Deno\.env\.get/);
+  assert.doesNotMatch(provision, /TempPass123/);
+  assert.doesNotMatch(provision, /\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}/);
+  assert.match(template, /admin-change-password|REPLACE THE TEMPORARY PASSWORD/);
+});
+
+
+test('public schema hardening and genuine portfolio history are versioned', () => {
+  const sql = read('supabase/migrations/20260825210020_public_rls_and_market_history.sql');
+  assert.match(sql, /alter table %s enable row level security/i);
+  assert.match(sql, /force row level security/i);
+  assert.match(sql, /create table friend_exchange\.portfolio_equity_events/i);
+  assert.match(sql, /portfolio_equity_events_read_own/i);
+  assert.match(sql, /capture_friend_trade_equity/i);
+  assert.match(sql, /capture_friend_settlement_equity/i);
+});
+
+test('private admin tables have explicit deny policies', () => {
+  const sql = read('supabase/migrations/20260826002931_friend_exchange_admin_deny_policies.sql');
+  assert.match(sql, /app_admins_deny_browser/);
+  assert.match(sql, /for all to anon, authenticated using \(false\)/i);
 });

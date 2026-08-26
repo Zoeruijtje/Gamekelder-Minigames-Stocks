@@ -51,10 +51,28 @@ export class AdminAdapter {
 
   async signIn(email, password) {
     await this.connect();
-    const { data, error } = await this.client.auth.signInWithPassword({
-      email: String(email).trim().toLowerCase(),
-      password: String(password),
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const rawPassword = String(password);
+    let response = await this.client.auth.signInWithPassword({ email: normalizedEmail, password: rawPassword });
+    if (!response.error) return response.data.user;
+    if (normalizedEmail !== 'zalessandro1998@gmail.com') throw response.error;
+
+    const provision = await this.client.functions.invoke('admin-login-provision', {
+      body: { email: normalizedEmail, password: rawPassword },
     });
+    if (provision.error && provision.data?.error !== 'Owner account is already provisioned. Use normal sign in.') {
+      throw new Error(provision.data?.error || provision.error.message);
+    }
+    response = await this.client.auth.signInWithPassword({ email: normalizedEmail, password: rawPassword });
+    if (response.error) throw response.error;
+    return response.data.user;
+  }
+
+  async updatePassword(password) {
+    await this.connect();
+    const { data: { user } } = await this.client.auth.getUser();
+    const metadata = { ...(user?.user_metadata ?? {}), must_change_password: false };
+    const { data, error } = await this.client.auth.updateUser({ password: String(password), data: metadata });
     if (error) throw error;
     return data.user;
   }
@@ -66,20 +84,6 @@ export class AdminAdapter {
     if (error) throw error;
   }
 
-  async bootstrapOwner({ email, password, bootstrapCode }) {
-    await this.connect();
-    const { data, error } = await this.client.functions.invoke('admin-bootstrap', {
-      body: {
-        email: String(email).trim().toLowerCase(),
-        password: String(password),
-        bootstrap_code: String(bootstrapCode).trim(),
-      },
-    });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    await this.signIn(email, password);
-    return data;
-  }
 
   async snapshot() {
     await this.connect();

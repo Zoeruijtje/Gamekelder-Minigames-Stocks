@@ -224,6 +224,31 @@ export class OnlineGameAdapter {
     return data;
   }
 
+  async upsertProtectiveOrder(order) {
+    await this.connect();
+    const { data, error } = await this.db.rpc('upsert_protective_order', {
+      p_portfolio_id: order.portfolioId,
+      p_symbol: order.symbol,
+      p_order_type: order.type,
+      p_trigger_price: order.stopPrice ?? null,
+      p_take_profit_price: order.takeProfitPrice ?? null,
+      p_trail_percent: order.trailPercent ?? null,
+      p_quantity_percent: order.quantityPercent ?? 100,
+      p_idempotency_key: order.idempotencyKey,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async cancelProtectiveOrder(orderId) {
+    await this.connect();
+    const { data, error } = await this.db.rpc('cancel_protective_order', {
+      p_order_id: orderId,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   subscribeRoom(roomId, handlers = {}) {
     if (!this.client) throw new Error('Call connect before subscribing.');
     this.unsubscribeRoom(roomId);

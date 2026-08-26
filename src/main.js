@@ -10,6 +10,8 @@ import {
   phaseCountdown,
   placePaperOrder,
   randomizeBotsForDemo,
+  removeProtectiveOrder,
+  saveProtectiveOrder,
   resetSession,
   settleRound,
   startSession,
@@ -24,9 +26,20 @@ import {
   buildOnlineQueue,
   buildOnlineRoundSpec,
   ensureOnlineState,
+  onlineSnapshotFingerprint,
 } from './services/online-state.js';
 import { AppStore } from './store.js';
+import { captureDomInteraction, isEditingInteraction, restoreDomInteraction } from './services/dom-preservation.js';
 import { renderApp } from './ui/templates.js';
+import {
+  applyOrderPreset,
+  applySellPreset,
+  patchLiveMarketDom,
+  refreshOrderPreview,
+  updateOrderInputMode,
+  updateRiskFieldVisibility,
+  updateSellPreview,
+} from './ui/portfolio-dom.js';
 
 const root = document.querySelector('#app');
 const store = new AppStore();
@@ -54,8 +67,18 @@ if (forcedRoute && store.getState().route !== forcedRoute) {
   store.setState({ ...store.getState(), route: forcedRoute }, { remote: false });
 }
 
-function render(state) {
+function render(state, meta = {}) {
+  if (meta.quoteTick) {
+    patchLiveMarketDom(root, state);
+    updateCountdownDom(state);
+    return;
+  }
+  const interaction = captureDomInteraction(root);
   root.innerHTML = renderApp(state);
+  restoreDomInteraction(root, interaction);
+  root.querySelectorAll('form[data-form="protective-order"]').forEach(updateRiskFieldVisibility);
+  root.querySelectorAll('form[data-form="order"]').forEach((form) => updateOrderInputMode(form, state));
+  root.querySelectorAll('form[data-form="position-sell"]').forEach((form) => updateSellPreview(form, state));
   updateCountdownDom(state);
 }
 
@@ -210,6 +233,17 @@ async function refreshOnline({ quiet = false } = {}) {
       const previous = store.getState();
       const previousPhase = previous.session.phase;
       const snapshot = await onlineAdapter.roomSnapshot(roomId);
+      const fingerprint = onlineSnapshotFingerprint(snapshot);
+      if (previous.online?.snapshotFingerprint === fingerprint) {
+        update((state) => {
+          state.online.lastSyncAt = new Date().toISOString();
+          state.ui.onlineBusy = false;
+          state.online.error = null;
+          return state;
+        }, { remote: true, onlineSync: true, silent: true, persist: false });
+        if (!onlineUnsubscribe || previous.online?.roomId !== roomId) await subscribeOnlineRoom(roomId);
+        return previous;
+      }
       let next = applyOnlineSnapshot(previous, snapshot, user.id);
       const round = currentRound(next);
       if (round?.phase === PHASES.RESULTS && previousPhase !== PHASES.RESULTS) next.ui.modal = 'results';
@@ -660,6 +694,42 @@ root.addEventListener('click', async (event) => {
       case 'trade-asset':
         update((state) => { state.ui.modal = { type: 'order', market: target.dataset.market, symbol: target.dataset.symbol }; return state; });
         break;
+      case 'manage-position':
+        update((state) => { state.ui.modal = { type: 'position', market: target.dataset.market, symbol: target.dataset.symbol, chartMode: 'profit' }; return state; });
+        break;
+      case 'buy-more-position':
+        update((state) => { state.ui.modal = { type: 'order', market: target.dataset.market, symbol: target.dataset.symbol }; return state; });
+        break;
+      case 'position-chart-mode':
+        update((state) => {
+          if (state.ui.modal?.type === 'position') state.ui.modal.chartMode = target.dataset.mode;
+          return state;
+        });
+        break;
+      case 'sell-preset':
+        applySellPreset(target, store.getState());
+        break;
+      case 'order-preset':
+        applyOrderPreset(target, store.getState());
+        break;
+      case 'cancel-protection': {
+        const state = store.getState();
+        const playerId = state.mode === 'online' ? state.online.userId : state.ui.selectedPlayerId;
+        const marketType = target.dataset.market;
+        if (state.mode === 'online' && marketType === 'friend') {
+          setOnlineBusy(true, 'trading');
+          await onlineAdapter.cancelProtectiveOrder(target.dataset.orderId);
+          await refreshOnline();
+          update((next) => { next.ui.modal = null; return next; });
+          setOnlineBusy(false);
+        } else {
+          const result = removeProtectiveOrder(state, { playerId, marketType, orderId: target.dataset.orderId });
+          result.state.ui.modal = null;
+          setState(result.state);
+        }
+        toast('Protective order cancelled.');
+        break;
+      }
       case 'open-controller': {
         const url = new URL(location.href);
         url.searchParams.set('controller', '1');
@@ -729,9 +799,25 @@ root.addEventListener('click', async (event) => {
   }
 });
 
+root.addEventListener('input', (event) => {
+  const form = event.target.closest('form');
+  if (!form) return;
+  if (form.dataset.form === 'position-sell') updateSellPreview(form, store.getState());
+  if (form.dataset.form === 'order') refreshOrderPreview(form, store.getState());
+});
+
 root.addEventListener('change', (event) => {
   const input = event.target;
   try {
+    const parentForm = input.closest('form');
+    if (parentForm?.dataset.form === 'order') {
+      updateOrderInputMode(parentForm, store.getState());
+      return;
+    }
+    if (parentForm?.dataset.form === 'protective-order') {
+      updateRiskFieldVisibility(parentForm);
+      return;
+    }
     if (input.matches('[data-player-field]')) {
       updatePlayersFromDom();
       return;
@@ -763,7 +849,10 @@ root.addEventListener('submit', async (event) => {
     if (form.dataset.form === 'order') {
       const data = new FormData(form);
       const state = store.getState();
+      const side = String(data.get('side') || 'buy');
       const playerId = state.mode === 'online' ? state.online.userId : state.ui.selectedPlayerId;
+      const notional = side === 'buy' ? Number(data.get('notional')) : null;
+      const quantity = side === 'sell' ? Number(data.get('quantity')) : null;
       if (state.mode === 'online' && data.get('market') === 'friend') {
         const account = state.accounts.friend[playerId];
         if (!account?.portfolioId) throw new Error('Your online Friend Market portfolio has not synchronized yet.');
@@ -771,8 +860,9 @@ root.addEventListener('submit', async (event) => {
         const result = await onlineAdapter.executeOrder({
           portfolioId: account.portfolioId,
           symbol: data.get('symbol'),
-          side: data.get('side'),
-          notional: Number(data.get('notional')),
+          side,
+          notional,
+          quantity,
           idempotencyKey: uid('online-order'),
         });
         await refreshOnline();
@@ -787,13 +877,71 @@ root.addEventListener('submit', async (event) => {
         playerId,
         marketType: data.get('market'),
         symbol: data.get('symbol'),
-        side: data.get('side'),
-        notional: Number(data.get('notional')),
+        side,
+        notional,
+        quantity,
         idempotencyKey: uid('web-order'),
       });
       result.state.ui.modal = null;
       setState(result.state);
       toast(`${result.fill.side.toUpperCase()} ${result.fill.quantity.toFixed(3)} ${result.fill.symbol} filled at €${result.fill.price.toFixed(2)}.`);
+      return;
+    }
+    if (form.dataset.form === 'position-sell') {
+      const data = new FormData(form);
+      const state = store.getState();
+      const playerId = state.mode === 'online' ? state.online.userId : state.ui.selectedPlayerId;
+      const marketType = String(data.get('market'));
+      const quantity = Number(data.get('quantity'));
+      if (state.mode === 'online' && marketType === 'friend') {
+        const account = state.accounts.friend[playerId];
+        setOnlineBusy(true, 'trading');
+        const result = await onlineAdapter.executeOrder({
+          portfolioId: account.portfolioId,
+          symbol: data.get('symbol'),
+          side: 'sell',
+          quantity,
+          idempotencyKey: uid('online-sell'),
+        });
+        await refreshOnline();
+        update((next) => { next.ui.modal = null; return next; });
+        toast(`SELL ${Number(result.trade.quantity).toFixed(3)} ${result.trade.symbol} filled. Realised P/L ${new Intl.NumberFormat('en-NL', { style: 'currency', currency: 'EUR', signDisplay: 'always' }).format(result.trade.realized_pnl)}.`);
+        setOnlineBusy(false);
+      } else {
+        const result = placePaperOrder(state, { playerId, marketType, symbol: data.get('symbol'), side: 'sell', quantity, idempotencyKey: uid('position-sell') });
+        result.state.ui.modal = null;
+        setState(result.state);
+        toast(`Sold ${result.fill.quantity.toFixed(3)} ${result.fill.symbol}. Realised P/L ${new Intl.NumberFormat('en-NL', { style: 'currency', currency: 'EUR', signDisplay: 'always' }).format(result.fill.realizedPnl)}.`);
+      }
+      return;
+    }
+    if (form.dataset.form === 'protective-order') {
+      const data = new FormData(form);
+      const state = store.getState();
+      const playerId = state.mode === 'online' ? state.online.userId : state.ui.selectedPlayerId;
+      const marketType = String(data.get('market'));
+      const input = {
+        symbol: String(data.get('symbol')),
+        type: String(data.get('type')),
+        stopPrice: Number(data.get('stopPrice')) || null,
+        takeProfitPrice: Number(data.get('takeProfitPrice')) || null,
+        trailPercent: Number(data.get('trailPercent')) || null,
+        quantityPercent: Number(data.get('quantityPercent')) || 100,
+        idempotencyKey: uid('risk-order'),
+      };
+      if (state.mode === 'online' && marketType === 'friend') {
+        const account = state.accounts.friend[playerId];
+        setOnlineBusy(true, 'trading');
+        await onlineAdapter.upsertProtectiveOrder({ portfolioId: account.portfolioId, ...input });
+        await refreshOnline();
+        update((next) => { next.ui.modal = null; return next; });
+        setOnlineBusy(false);
+      } else {
+        const result = saveProtectiveOrder(state, { playerId, marketType, ...input });
+        result.state.ui.modal = null;
+        setState(result.state);
+      }
+      toast('Protective order activated.');
       return;
     }
     if (form.dataset.form === 'estimate') {
@@ -825,7 +973,17 @@ setInterval(async () => {
   }
 }, 500);
 
-setInterval(() => store.tickQuotes(), 5000);
+setInterval(() => {
+  const state = store.getState();
+  const interactionLocked = isEditingInteraction() || state.ui.modal === 'game' || state.session.phase === PHASES.GAME;
+  const beforeTriggers = state.ui.lastProtectiveTriggers?.length ?? 0;
+  const next = store.tickQuotes({ silent: interactionLocked });
+  const triggers = next?.ui?.lastProtectiveTriggers ?? [];
+  if (triggers.length > beforeTriggers) {
+    const latest = triggers.at(-1);
+    toast(`PROTECTION TRIGGERED: sold ${Number(latest.quantity).toFixed(3)} ${latest.symbol} at €${Number(latest.price).toFixed(2)}.`);
+  }
+}, 5000);
 
 window.addEventListener('pagehide', () => {
   stopOnlineSync();

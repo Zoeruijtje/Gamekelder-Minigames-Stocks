@@ -58,11 +58,24 @@ Friend Market prices are driven primarily by actual performance relative to each
 - **Real-symbol paper market:** a clearly labelled local `DEMO` feed in the free build.
 - Separate fictional balances for both markets.
 - Fractional buy and sell orders.
-- Weighted average cost.
-- Realised and unrealised fictional profit/loss.
+- Weighted average cost and exact cost basis.
+- Realised, unrealised and combined fictional profit/loss per holding.
+- Per-position profit/price graphs based on observed events.
+- Exact partial/full sell proceeds and realised P/L before confirmation.
+- Stop loss, take profit, trailing stop and bracket protection.
 - Idempotent order handling and immutable trade records.
 
 No paid real-time market-data provider is required for the core game.
+
+## Stable interaction model
+
+Online synchronization no longer rebuilds the page when the authoritative snapshot has not changed. Local DEMO quote ticks patch prices, P/L and graphs in place. When a major state transition does require a full render, the application preserves typed values, focus, caret position, scroll and in-progress minigame input.
+
+## Administrator access
+
+The control center is login-only; the public first-owner setup surface has been removed. The initial owner credential must be replaced with a unique permanent password immediately after first sign-in. Administrator and player Auth sessions remain separate.
+
+See [`docs/ADVANCED_PORTFOLIO_AND_RISK.md`](docs/ADVANCED_PORTFOLIO_AND_RISK.md) and [`docs/ADMIN_CONTROL_CENTER.md`](docs/ADMIN_CONTROL_CENTER.md).
 
 ## Responsive interface
 
@@ -92,12 +105,13 @@ The test suite includes:
 
 - JavaScript syntax checks;
 - all eight minigame scoring modules;
-- portfolio and order invariants;
+- portfolio, sale-preview and protective-order invariants;
 - deterministic expectation-based settlement;
 - explicit before/after market-price tests;
 - online-snapshot normalization tests;
 - responsive checks at phone, tablet and desktop sizes;
 - a full browser flow from trade through Reaction Test to visible market repricing;
+- exact position management, profit graphs, stop-loss controls and refresh-safe typing;
 - high-quality background reconstruction checks.
 
 ## Public runtime configuration
@@ -113,6 +127,8 @@ styles-pages.css
 styles-interaction.css
 responsive.css
 online.css
+portfolio-advanced.css
+admin.css
 background-hq.css
 supabase-config.js
 src/

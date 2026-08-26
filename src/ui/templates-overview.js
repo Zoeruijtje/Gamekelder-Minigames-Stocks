@@ -37,9 +37,21 @@ export function selectedPlayer(state) {
 function combinedPortfolioSeries(state, player) {
   const real = portfolioSnapshot(state.accounts.real[player.id], state.markets.real);
   const friend = portfolioSnapshot(state.accounts.friend[player.id], friendQuotesBySymbol(state));
-  const base = real.equity + friend.equity;
-  return Array.from({ length: 24 }, (_, index) => base * (0.91 + index * 0.0035 + Math.sin(index * 0.9) * 0.008))
-    .map((value, index, items) => index === items.length - 1 ? base : value);
+  const events = [
+    ...(real.history ?? []).map((point) => ({ ...point, market: 'real' })),
+    ...(friend.history ?? []).map((point) => ({ ...point, market: 'friend' })),
+  ].sort((left, right) => new Date(left.at ?? 0) - new Date(right.at ?? 0));
+  let realEquity = Number(real.history?.[0]?.equity ?? real.equity);
+  let friendEquity = Number(friend.history?.[0]?.equity ?? friend.equity);
+  const series = events.map((point) => {
+    if (point.market === 'real') realEquity = Number(point.equity ?? realEquity);
+    else friendEquity = Number(point.equity ?? friendEquity);
+    return realEquity + friendEquity;
+  });
+  const current = real.equity + friend.equity;
+  if (!series.length) return [current, current];
+  if (Math.abs(series.at(-1) - current) > .005) series.push(current);
+  return series.slice(-40);
 }
 
 function onlineSubmissionStatus(state, round) {
@@ -137,7 +149,7 @@ export function overview(state) {
   return `<section class="view-section">
     <div class="view-heading"><div><span class="eyebrow">PORTFOLIO / ${state.mode === 'online' ? `ONLINE ROOM ${escapeHtml(state.online.roomCode ?? '')}` : 'LIVE SESSION'}</span><h1>MARKET NIGHT</h1><p>Trade the room, play the minigame, then watch the Friend Market reprice in a visible settlement.</p></div>${marketStateCard(state)}</div>
     <div class="dashboard-grid">
-      <article class="portfolio-hero glass"><div class="card-topline"><span class="eyebrow">COMBINED FICTIONAL EQUITY</span><span class="feed-label">${state.mode === 'online' ? 'ONLINE FRIEND + DEMO REAL' : 'DEMO + SESSION'}</span></div><div class="hero-value-row"><div><strong>${money(total)}</strong><em class="${pnl >= 0 ? 'positive' : 'negative'}">${signedMoney(pnl)} · ${signedPercent((pnl / starting) * 100)}</em></div><div class="mini-stats"><span>Real market<b>${money(realSnapshot.equity)}</b></span><span>Friend market<b>${money(friendSnapshot.equity)}</b></span><span>Cash<b>${money(realSnapshot.cash + friendSnapshot.cash)}</b></span></div></div>${lineChart(combinedPortfolioSeries(state, player))}<div class="chart-axis"><span>09:30</span><span>11:00</span><span>12:30</span><span>14:00</span><span>15:30</span><span>17:00</span></div></article>
+      <article class="portfolio-hero glass"><div class="card-topline"><span class="eyebrow">COMBINED FICTIONAL EQUITY</span><span class="feed-label">${state.mode === 'online' ? 'ONLINE FRIEND + DEMO REAL' : 'DEMO + SESSION'}</span></div><div class="hero-value-row"><div><strong>${money(total)}</strong><em class="${pnl >= 0 ? 'positive' : 'negative'}">${signedMoney(pnl)} · ${signedPercent((pnl / starting) * 100)}</em></div><div class="mini-stats"><span>Real market<b>${money(realSnapshot.equity)}</b></span><span>Friend market<b>${money(friendSnapshot.equity)}</b></span><span>Cash<b>${money(realSnapshot.cash + friendSnapshot.cash)}</b></span></div></div>${lineChart(combinedPortfolioSeries(state, player))}<div class="chart-axis"><span>OPEN</span><span>TRADES</span><span>SETTLEMENTS</span><span>NOW</span></div></article>
       ${round ? `<article class="round-card glass"><div class="card-topline"><span class="eyebrow">ROUND ${round.index + 1} / ${state.session.roundCount}</span><span class="live-pill">${state.session.phase}</span></div><span class="round-category">${escapeHtml(CATEGORY_LABELS[game.category])}</span><h2>${escapeHtml(game.name)}</h2><p>${escapeHtml(game.description)}</p>${round.phase === PHASES.TRADING ? '<div class="round-trading-rule"><b>1. TRADE NOW</b><span>2. Orders auto-lock at 00:00</span><span>3. Play the minigame</span><span>4. Results reprice every friend stock</span></div>' : ''}<div class="round-actions">${roundActions(state, round)}</div></article>` : ''}
       ${marketMovementCard(state, round, player)}
       <article class="holdings-card glass"><div class="card-topline"><span class="eyebrow">FRIEND MARKET</span><button class="text-button" data-action="view" data-view="market">OPEN MARKET →</button></div><div class="asset-table">${friendAssets.map((asset) => { const owner = state.players.find((candidate) => candidate.id === asset.ownerId); return `<button class="asset-row" data-action="trade-asset" data-market="friend" data-symbol="${asset.symbol}">${playerAvatar(owner)}<span><strong>${asset.symbol}</strong><small>${escapeHtml(asset.name)}</small></span><b>${money(asset.price)}</b><em class="${asset.roundChange >= 0 ? 'positive' : 'negative'}">${signedPercent(asset.roundChange)}</em>${sparkline(asset.history.map((point) => point.price), asset.roundChange >= 0 ? '' : 'is-negative')}</button>`; }).join('')}</div></article>
