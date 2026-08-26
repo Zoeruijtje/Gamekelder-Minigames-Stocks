@@ -1,80 +1,71 @@
 # Next Session Prompt
 
-Continue the Friend Exchange implementation in `Zoeruijtje/Gamekelder-Minigames-Stocks`.
+Continue Friend Exchange in `Zoeruijtje/Gamekelder-Minigames-Stocks` from the advanced-portfolio release merged as `6d432ce4ef81881153971413d0e9bcc0ae496216`.
 
-## Starting point
+## Read first
 
-- Base branch: `main`
-- Product branch: `feat/full-product-mvp`
-- Read first:
-  - `README.md`
-  - `docs/FULL_IMPLEMENTATION_PLAN.md`
-  - `docs/IMPLEMENTATION_STATUS.md`
-  - `docs/SUPABASE_PLAN.md`
-  - `docs/CONTINUATION_PROTOCOL.md`
-- Inspect the product pull request and its latest Product QA workflow before changing code.
+- `README.md`
+- `docs/FULL_IMPLEMENTATION_PLAN.md`
+- `docs/PRODUCT_IMPROVEMENT_PLAN.md`
+- `docs/MARKET_EXPERIENCE.md`
+- `docs/ADVANCED_PORTFOLIO_AND_RISK.md`
+- `docs/ADMIN_CONTROL_CENTER.md`
+- `docs/IMPLEMENTATION_STATUS.md`
+- the latest `Product QA`, `Live Supabase Smoke`, and GitHub Pages deployment results
 
 ## Objective
 
-Provision and integrate a **dedicated** Supabase backend for Friend Exchange without modifying the existing unrelated Supabase project.
+Make the eight minigames and the complete game-night flow substantially more replayable, social, and polished without weakening the now-authoritative market, portfolio, or security systems.
 
-The connected organization is expected to be `Zoeruijtje's Org`, but project creation must occur only after the user explicitly confirms the organization and the displayed creation cost.
+### 1. Multi-trial skill games
 
-After confirmation:
+- Reaction Test: 3–5 randomized trials, false-start handling, median valid result, clear per-trial feedback, and an accessible alternative.
+- Stop the Clock: three varying target times, hidden running timer, best/median scoring, and consistent server validation.
+- Memory Grid: progressive stages, multiple board sizes, static and sequential variants, and deterministic seeded content.
+- Higher / Lower: a proper 5–10-card streak round with accuracy-first scoring and speed as a secondary tie-breaker.
 
-1. Create a dedicated project in an EU region, preferably `eu-central-1`, with an unambiguous name such as `Friend Exchange Gamekelder`.
-2. Apply the checked-in migrations under `supabase/migrations` in order.
-3. Review every migration before execution and fix conflicts, unsafe grants or insufficient Row Level Security.
-4. Enable the authentication mode required by the product, prioritizing low-friction anonymous/guest joining with a documented upgrade path to email/OAuth.
-5. Configure private Realtime channels and verify room membership authorization.
-6. Deploy the checked-in Edge Functions:
-   - `market-quotes`
-   - `settle-round`
-7. Configure only required public browser values. Never commit a Supabase secret key, service-role credential or market-data provider key.
-8. Wire the existing online adapter into the UI behind an explicit configuration boundary while preserving offline/local demo mode.
-9. Implement and verify:
-   - create room;
-   - join by code;
-   - presence and ready state;
-   - two-client synchronized round state;
-   - private submission isolation;
-   - authoritative single settlement;
-   - reconnect snapshot;
-   - host transfer or a documented safe fallback.
-10. Add database/RLS tests proving cross-room isolation, ownership controls, duplicate-submission rejection and idempotent order/settlement handling.
-11. Add a Playwright test with one host and at least two player contexts.
-12. Run all unit, browser, responsive, database and secret-scanning checks.
-13. Update deployment and architecture documentation with the actual project configuration, excluding secrets.
+### 2. Richer social and estimation games
 
-## Product constraints
+- Expand Closest Wins with curated, versioned category packs and percentage-error scoring.
+- Replace generic Minority Rules A/B prompts with meaningful social, risk, and market choices.
+- Run Prisoner’s Dilemma over multiple partner rounds and reveal cooperation, betrayal, revenge, and trust statistics.
+- Make Prediction Desk predict the next actual minigame and reward expectation-aware predictions.
+- Add admin-editable content packs with schema validation and safe fallbacks.
+
+### 3. Host-versus-phone experience
+
+- Make the TV/host display readable from 2–4 metres: giant phase, countdown, instructions, public progress, and cinematic reveals.
+- Make the phone controller one-task-at-a-time: market, locked, game, submitted, and results states.
+- Never expose private answers or hidden content on the host display before reveal.
+- Add submission-progress indicators without causing full-page rerenders or resetting active controls.
+
+### 4. Game-night presentation
+
+- Add restrained sound, haptics, countdown cues, and reduced-motion/mute controls.
+- Improve transitions from trading lock to briefing to game to settlement.
+- Add a complete Market Close recap: richest investor, best company, minigame champion, biggest trade, biggest crash, best underdog, favourite miss, trust award, betrayal award, and comeback.
+- Generate a shareable recap card using only fictional values.
+
+### 5. Reliability and testing
+
+- Preserve local/offline mode and Supabase Free Plan compatibility.
+- Keep scoring deterministic and authoritative.
+- Preserve every typed answer, timer state, focus position, and controller state across Realtime updates.
+- Add unit tests for every scoring rule and content schema.
+- Add multi-context Playwright tests with one host and at least four player controllers.
+- Add reconnect, late submission, duplicate submission, host failover, reduced-motion, phone landscape, and 200% zoom tests.
+- Run security/performance advisors after database changes.
+
+## Constraints
 
 - All money remains fictional.
-- The Friend Market and Real Portfolio remain separate economies.
-- Minigame settlement remains based mainly on performance versus expectation.
-- Preserve the approved warm luxury gamekelder design and transparent glass hierarchy.
-- Phone UI must remain a focused controller rather than a compressed desktop dashboard.
-- Local/offline mode must remain usable if Supabase or the market-data provider is unavailable.
-
-## Security constraints
-
-- Treat every browser submission as untrusted.
-- Keep authoritative prices, scores, cash and settlement server-side.
-- Use least-privilege RLS on every exposed table.
-- Use private Realtime channels with membership authorization.
-- Reject duplicate nonces and idempotency keys.
-- Do not use the existing unrelated Supabase project.
-- Do not merge until CI is green and the data/security changes are reviewable.
+- Do not add real-money trading, brokerage connections, gambling rewards, or paid infrastructure.
+- Do not weaken RLS, private Realtime authorization, order idempotency, authoritative settlement, or protective-order guarantees.
+- Preserve the warm luxury gamekelder and smoked-glass visual identity; avoid neon/cyberpunk or generic SaaS styling.
+- Do not merge until Product QA and Live Supabase Smoke are green on the exact head commit.
 
 ## Definition of done
 
-- A dedicated Supabase project exists and is healthy.
-- Migrations and functions deploy successfully from a clean database.
-- Two separate browser clients can join the same room and complete one synchronized round.
-- A non-member cannot read the room, portfolio or private submissions.
-- Settlement occurs exactly once and every client receives the same resulting prices.
-- Reconnect restores the correct authoritative state.
-- Local mode still passes its complete session flow.
-- All repository CI checks pass.
-- A live preview and concise review checklist are posted to the pull request.
+A group of 3–8 players can complete a 45–75 minute session in which every game has enough depth to replay, the host screen and phone controls feel intentionally different, active input never resets, the market reacts clearly to results, and the final recap feels worth sharing.
 
-At the end of the session, replace this file with the next bounded continuation prompt and update the single `Next session:` GitHub issue according to `docs/CONTINUATION_PROTOCOL.md`.
+At the end of that session, replace this file with the next bounded prompt and update the single `Next session:` GitHub issue according to `docs/CONTINUATION_PROTOCOL.md`.
